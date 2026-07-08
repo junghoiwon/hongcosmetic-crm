@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, FileText } from "lucide-react";
+import { Plus, Trash2, FileText, Search } from "lucide-react";
 import { quotesDB, clientsDB, productsDB, logActivity } from "../lib/db";
 import { QUOTE_STATUS, QUOTE_STATUS_COLOR, CURRENCY } from "../lib/constants";
 import { formatMoney, formatDate, todayISO } from "../lib/utils";
@@ -23,6 +23,7 @@ export default function Quotes({ session }) {
   const [quotes, setQuotes] = useState([]);
   const [clients, setClients] = useState([]);
   const [products, setProducts] = useState([]);
+  const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -42,6 +43,16 @@ export default function Quotes({ session }) {
 
   const clientName = (id) => clients.find((c) => c.id === id)?.companyName || "삭제된 거래처";
   const productName = (id) => products.find((p) => p.id === id)?.name || "삭제된 제품";
+
+  const filteredQuotes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return quotes;
+    return quotes.filter((quote) =>
+      [clientName(quote.clientId), productName(quote.productId), quote.memo]
+        .filter(Boolean)
+        .some((v) => v.toLowerCase().includes(q))
+    );
+  }, [quotes, search, clients, products]);
 
   const total = useMemo(() => {
     const q = Number(form.quantity) || 0;
@@ -120,14 +131,28 @@ export default function Quotes({ session }) {
         </Button>
       </div>
 
-      {quotes.length === 0 ? (
+      <div className="relative max-w-sm mb-4">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-subink" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="거래처, 제품, 메모로 검색"
+          className="w-full pl-9 pr-3 py-2 rounded-lg border border-line bg-white text-sm outline-none focus:border-jade-500 focus:ring-2 focus:ring-jade-500/15"
+        />
+      </div>
+
+      {filteredQuotes.length === 0 ? (
         <EmptyState
-          title="작성된 견적이 없습니다"
-          description="거래처와 제품을 선택해 견적서를 작성해보세요."
+          title={quotes.length === 0 ? "작성된 견적이 없습니다" : "검색 결과가 없습니다"}
+          description={
+            quotes.length === 0 ? "거래처와 제품을 선택해 견적서를 작성해보세요." : "다른 검색어를 시도해보세요."
+          }
           action={
-            <Button onClick={openCreate}>
-              <Plus size={16} /> 견적 작성
-            </Button>
+            quotes.length === 0 && (
+              <Button onClick={openCreate}>
+                <Plus size={16} /> 견적 작성
+              </Button>
+            )
           }
         />
       ) : (
@@ -146,7 +171,7 @@ export default function Quotes({ session }) {
               </tr>
             </thead>
             <tbody>
-              {quotes.map((q) => (
+              {filteredQuotes.map((q) => (
                 <tr
                   key={q.id}
                   onClick={() => openEdit(q)}

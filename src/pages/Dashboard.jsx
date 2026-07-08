@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Building2, MessagesSquare, PackageOpen, FileText, Flame, CalendarClock, History } from "lucide-react";
 import { clientsDB, quotesDB, samplesDB, consultationsDB, activityLogsDB } from "../lib/db";
+import { supabase } from "../lib/supabaseClient";
 import { ACTIVE_CLIENT_STATUS, HOT_CLIENT_STATUS, CLIENT_STATUS_COLOR, IMPORTANCE_COLOR } from "../lib/constants";
 import { formatDate, todayISO } from "../lib/utils";
 import { StatCard, EmptyState } from "../components/ui/Basics";
@@ -13,7 +14,7 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
   const [consultations, setConsultations] = useState([]);
   const [recentLogs, setRecentLogs] = useState([]);
 
-  useEffect(() => {
+  const loadAll = () => {
     clientsDB.list().then(setClients);
     quotesDB.list().then(setQuotes);
     samplesDB.list().then(setSamples);
@@ -21,6 +22,25 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
     activityLogsDB
       .list()
       .then((rows) => setRecentLogs(rows.sort((a, b) => new Date(b.ts) - new Date(a.ts)).slice(0, 10)));
+  };
+
+  useEffect(() => {
+    loadAll();
+
+    // 거래처 등록/견적·샘플 등록 등이 다른 탭이나 다른 직원 화면에서
+    // 일어나도 대시보드가 새로고침 없이 자동으로 갱신되도록 실시간 구독합니다.
+    const channel = supabase
+      .channel("dashboard-live-updates")
+      .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, loadAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "quotations" }, loadAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "samples" }, loadAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "consultations" }, loadAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "update_logs" }, loadAll)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const activeCount = useMemo(

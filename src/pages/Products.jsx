@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, FlaskConical } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Pencil, Trash2, FlaskConical, Search } from "lucide-react";
 import { productsDB, logActivity } from "../lib/db";
 import { formatMoney, formatNumber } from "../lib/utils";
 import Modal from "../components/ui/Modal";
@@ -21,6 +21,7 @@ const EMPTY = {
 
 export default function Products({ session }) {
   const [products, setProducts] = useState([]);
+  const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -33,6 +34,14 @@ export default function Products({ session }) {
   useEffect(() => {
     load();
   }, []);
+
+  const filteredProducts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) =>
+      [p.name, p.hsCode, p.capacity, p.note].filter(Boolean).some((v) => v.toLowerCase().includes(q))
+    );
+  }, [products, search]);
 
   const openCreate = () => {
     setEditing(null);
@@ -117,14 +126,30 @@ export default function Products({ session }) {
         </Button>
       </div>
 
-      {products.length === 0 ? (
+      <div className="relative max-w-sm mb-4">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-subink" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="제품명, HS CODE, 용량으로 검색"
+          className="w-full pl-9 pr-3 py-2 rounded-lg border border-line bg-white text-sm outline-none focus:border-jade-500 focus:ring-2 focus:ring-jade-500/15"
+        />
+      </div>
+
+      {filteredProducts.length === 0 ? (
         <EmptyState
-          title="등록된 제품이 없습니다"
-          description="첫 제품을 등록하고 견적서 작성에 바로 활용해보세요."
+          title={products.length === 0 ? "등록된 제품이 없습니다" : "검색 결과가 없습니다"}
+          description={
+            products.length === 0
+              ? "첫 제품을 등록하고 견적서 작성에 바로 활용해보세요."
+              : "다른 검색어를 시도해보세요."
+          }
           action={
-            <Button onClick={openCreate}>
-              <Plus size={16} /> 제품 등록
-            </Button>
+            products.length === 0 && (
+              <Button onClick={openCreate}>
+                <Plus size={16} /> 제품 등록
+              </Button>
+            )
           }
         />
       ) : (
@@ -145,7 +170,7 @@ export default function Products({ session }) {
               </tr>
             </thead>
             <tbody>
-              {products.map((p) => (
+              {filteredProducts.map((p) => (
                 <tr key={p.id} className="border-t border-line hover:bg-porcelain/60">
                   <td className="px-4 py-3 font-medium text-ink flex items-center gap-2">
                     <FlaskConical size={14} className="text-jade-500 shrink-0" />

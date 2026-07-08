@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Plus, Trash2, PackageOpen } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Trash2, PackageOpen, Search } from "lucide-react";
 import { samplesDB, clientsDB, logActivity } from "../lib/db";
 import { CARRIERS } from "../lib/constants";
 import { formatMoney, formatDate, todayISO, dDayLabel } from "../lib/utils";
@@ -24,6 +24,7 @@ const EMPTY = {
 export default function Samples({ session }) {
   const [samples, setSamples] = useState([]);
   const [clients, setClients] = useState([]);
+  const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -41,6 +42,16 @@ export default function Samples({ session }) {
   }, []);
 
   const clientName = (id) => clients.find((c) => c.id === id)?.companyName || "삭제된 거래처";
+
+  const filteredSamples = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return samples;
+    return samples.filter((s) =>
+      [clientName(s.clientId), s.productName, s.trackingNumber, s.carrier]
+        .filter(Boolean)
+        .some((v) => v.toLowerCase().includes(q))
+    );
+  }, [samples, search, clients]);
 
   const openCreate = () => {
     setEditing(null);
@@ -102,14 +113,30 @@ export default function Samples({ session }) {
         </Button>
       </div>
 
-      {samples.length === 0 ? (
+      <div className="relative max-w-sm mb-4">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-subink" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="거래처, 제품명, 송장번호로 검색"
+          className="w-full pl-9 pr-3 py-2 rounded-lg border border-line bg-white text-sm outline-none focus:border-jade-500 focus:ring-2 focus:ring-jade-500/15"
+        />
+      </div>
+
+      {filteredSamples.length === 0 ? (
         <EmptyState
-          title="등록된 샘플 발송이 없습니다"
-          description="샘플을 발송하고 도착 예정일과 후속 연락일을 기록해보세요."
+          title={samples.length === 0 ? "등록된 샘플 발송이 없습니다" : "검색 결과가 없습니다"}
+          description={
+            samples.length === 0
+              ? "샘플을 발송하고 도착 예정일과 후속 연락일을 기록해보세요."
+              : "다른 검색어를 시도해보세요."
+          }
           action={
-            <Button onClick={openCreate}>
-              <Plus size={16} /> 샘플 발송 등록
-            </Button>
+            samples.length === 0 && (
+              <Button onClick={openCreate}>
+                <Plus size={16} /> 샘플 발송 등록
+              </Button>
+            )
           }
         />
       ) : (
@@ -128,7 +155,7 @@ export default function Samples({ session }) {
               </tr>
             </thead>
             <tbody>
-              {samples.map((s) => (
+              {filteredSamples.map((s) => (
                 <tr
                   key={s.id}
                   onClick={() => openEdit(s)}

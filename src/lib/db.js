@@ -18,6 +18,7 @@ const TABLES = {
   customCountries: "customCountries",
   settings: "settings",
   activityLogs: "activityLogs",
+  users: "users",
 };
 
 function makeRepo(table) {
@@ -38,6 +39,7 @@ export const consultationsDB = makeRepo(TABLES.consultations);
 export const customCountriesDB = makeRepo(TABLES.customCountries);
 export const settingsDB = makeRepo(TABLES.settings);
 export const activityLogsDB = makeRepo(TABLES.activityLogs);
+export const usersDB = makeRepo(TABLES.users);
 
 export const DEFAULT_MENU_LABELS = {
   dashboard: "대시보드",
