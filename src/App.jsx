@@ -6,6 +6,7 @@ import Clients from "./pages/Clients";
 import Products from "./pages/Products";
 import Quotes from "./pages/Quotes";
 import Samples from "./pages/Samples";
+import SalesReport from "./pages/SalesReport";
 import Settings from "./pages/Settings";
 import UpdateLog from "./pages/UpdateLog";
 import Users from "./pages/Users";
@@ -259,6 +260,8 @@ export default function App() {
         return <Quotes session={session} permissionMap={permissionMap} />;
       case "samples":
         return <Samples session={session} permissionMap={permissionMap} />;
+      case "sales_report":
+        return <SalesReport />;
       case "logs":
         return <UpdateLog />;
       case "settings":

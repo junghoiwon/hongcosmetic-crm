@@ -2,28 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { X, Pin, PinOff, Trash2, Plus, Phone, Mail, MessageCircle, Pencil, TrendingUp } from "lucide-react";
 import { consultationsDB, quotesDB, samplesDB, productsDB, logActivity } from "../lib/db";
 import { CLIENT_STATUS_COLOR, IMPORTANCE_COLOR } from "../lib/constants";
-import { formatDate, todayISO, formatMoney } from "../lib/utils";
+import { formatDate, todayISO, formatMoney, PERIOD_OPTIONS, isWithinPeriod } from "../lib/utils";
 import Badge from "./ui/Badge";
 import { Field, TextArea, TextInput, Select } from "./ui/Field";
 import { Button, ConfirmDialog } from "./ui/Basics";
-
-const PERIOD_OPTIONS = [
-  { value: "all", label: "전체 기간" },
-  { value: "3m", label: "최근 3개월" },
-  { value: "6m", label: "최근 6개월" },
-  { value: "year", label: "올해" },
-];
-
-function withinPeriod(dateStr, period) {
-  if (period === "all" || !dateStr) return true;
-  const date = new Date(dateStr);
-  const now = new Date();
-  if (period === "year") return date.getFullYear() === now.getFullYear();
-  const months = period === "3m" ? 3 : 6;
-  const cutoff = new Date(now);
-  cutoff.setMonth(cutoff.getMonth() - months);
-  return date >= cutoff;
-}
 
 export default function ClientDetailDrawer({ client, onClose, onEdit, session, canEdit, canCreate, canDelete }) {
   const [consultations, setConsultations] = useState([]);
@@ -56,7 +38,7 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session, c
 
   const salesSummary = useMemo(() => {
     const productMap = Object.fromEntries(products.map((p) => [p.id, p]));
-    const approved = quotes.filter((q) => q.status === "승인" && withinPeriod(q.quoteDate, salesPeriod));
+    const approved = quotes.filter((q) => q.status === "승인" && isWithinPeriod(q.quoteDate, salesPeriod));
 
     const byProduct = {};
     for (const q of approved) {

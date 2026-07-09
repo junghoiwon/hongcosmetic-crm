@@ -36,6 +36,26 @@ export function dDayLabel(dateStr) {
   return `D+${Math.abs(diff)}`;
 }
 
+/** 판매 실적 등에서 쓰는 기간 필터 옵션. */
+export const PERIOD_OPTIONS = [
+  { value: "all", label: "전체 기간" },
+  { value: "3m", label: "최근 3개월" },
+  { value: "6m", label: "최근 6개월" },
+  { value: "year", label: "올해" },
+];
+
+/** dateStr이 주어진 기간(period) 안에 포함되는지 확인합니다. */
+export function isWithinPeriod(dateStr, period) {
+  if (period === "all" || !dateStr) return true;
+  const date = new Date(dateStr);
+  const now = new Date();
+  if (period === "year") return date.getFullYear() === now.getFullYear();
+  const months = period === "3m" ? 3 : 6;
+  const cutoff = new Date(now);
+  cutoff.setMonth(cutoff.getMonth() - months);
+  return date >= cutoff;
+}
+
 /** #RRGGBB 형태의 hex 색상을 rgba(...) 문자열로 변환합니다. 브랜드 컬러의 옅은 배경톤을 만들 때 사용합니다. */
 export function withAlpha(hex, alpha = 0.12) {
   if (!hex) return `rgba(47,111,98,${alpha})`;
