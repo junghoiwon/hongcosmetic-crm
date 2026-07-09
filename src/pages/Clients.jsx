@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Trash2, Building2 } from "lucide-react";
 import { clientsDB, customCountriesDB, saveCustomCountryIfNew, logActivity } from "../lib/db";
+import { canAccess } from "../lib/permissions";
 import { CLIENT_STATUS, CLIENT_STATUS_COLOR, IMPORTANCE, IMPORTANCE_COLOR, COUNTRIES } from "../lib/constants";
 import Modal from "../components/ui/Modal";
 import Badge from "../components/ui/Badge";
@@ -24,7 +25,7 @@ const EMPTY = {
   memo: "",
 };
 
-export default function Clients({ openClientId, clearOpenClientId, session }) {
+export default function Clients({ openClientId, clearOpenClientId, session, permissionMap }) {
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -33,6 +34,10 @@ export default function Clients({ openClientId, clearOpenClientId, session }) {
   const [form, setForm] = useState(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selected, setSelected] = useState(null);
+
+  const canCreate = canAccess(session, permissionMap, "clients", "create");
+  const canEdit = canAccess(session, permissionMap, "clients", "edit");
+  const canDelete = canAccess(session, permissionMap, "clients", "delete");
 
   const load = () =>
     clientsDB.list().then((rows) =>
@@ -131,9 +136,11 @@ export default function Clients({ openClientId, clearOpenClientId, session }) {
           <h1 className="font-display text-2xl font-semibold text-ink">거래처 관리</h1>
           <p className="text-sm text-subink mt-1">전체 {clients.length}개 거래처</p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus size={16} /> 거래처 등록
-        </Button>
+        {canCreate && (
+          <Button onClick={openCreate}>
+            <Plus size={16} /> 거래처 등록
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -178,7 +185,7 @@ export default function Clients({ openClientId, clearOpenClientId, session }) {
               : "다른 검색어나 필터를 시도해보세요."
           }
           action={
-            clients.length === 0 && (
+            clients.length === 0 && canCreate && (
               <Button onClick={openCreate}>
                 <Plus size={16} /> 거래처 등록
               </Button>
@@ -222,15 +229,17 @@ export default function Clients({ openClientId, clearOpenClientId, session }) {
                     <Badge className={IMPORTANCE_COLOR[c.importance]}>{c.importance}</Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget(c);
-                      }}
-                      className="p-1.5 rounded-md text-subink hover:bg-white hover:text-clay-600"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(c);
+                        }}
+                        className="p-1.5 rounded-md text-subink hover:bg-white hover:text-clay-600"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -341,6 +350,9 @@ export default function Clients({ openClientId, clearOpenClientId, session }) {
           onClose={() => setSelected(null)}
           onEdit={openEdit}
           session={session}
+          canEdit={canEdit}
+          canCreate={canCreate}
+          canDelete={canDelete}
         />
       )}
 

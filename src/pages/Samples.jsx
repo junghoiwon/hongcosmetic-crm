@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, PackageOpen, Search } from "lucide-react";
 import { samplesDB, clientsDB, logActivity } from "../lib/db";
+import { canAccess } from "../lib/permissions";
 import { CARRIERS } from "../lib/constants";
 import { formatMoney, formatDate, todayISO, dDayLabel } from "../lib/utils";
 import Modal from "../components/ui/Modal";
@@ -21,7 +22,7 @@ const EMPTY = {
   memo: "",
 };
 
-export default function Samples({ session }) {
+export default function Samples({ session, permissionMap }) {
   const [samples, setSamples] = useState([]);
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState("");
@@ -29,6 +30,10 @@ export default function Samples({ session }) {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const canCreate = canAccess(session, permissionMap, "samples", "create");
+  const canEdit = canAccess(session, permissionMap, "samples", "edit");
+  const canDelete = canAccess(session, permissionMap, "samples", "delete");
 
   const load = () => {
     samplesDB.list().then((rows) =>
@@ -108,9 +113,11 @@ export default function Samples({ session }) {
           <h1 className="font-display text-2xl font-semibold text-ink">샘플 발송 관리</h1>
           <p className="text-sm text-subink mt-1">샘플 발송 현황과 후속 연락 일정을 관리합니다.</p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus size={16} /> 샘플 발송 등록
-        </Button>
+        {canCreate && (
+          <Button onClick={openCreate}>
+            <Plus size={16} /> 샘플 발송 등록
+          </Button>
+        )}
       </div>
 
       <div className="relative max-w-sm mb-4">
@@ -132,7 +139,7 @@ export default function Samples({ session }) {
               : "다른 검색어를 시도해보세요."
           }
           action={
-            samples.length === 0 && (
+            samples.length === 0 && canCreate && (
               <Button onClick={openCreate}>
                 <Plus size={16} /> 샘플 발송 등록
               </Button>
@@ -158,8 +165,8 @@ export default function Samples({ session }) {
               {filteredSamples.map((s) => (
                 <tr
                   key={s.id}
-                  onClick={() => openEdit(s)}
-                  className="border-t border-line hover:bg-porcelain/60 cursor-pointer"
+                  onClick={canEdit ? () => openEdit(s) : undefined}
+                  className={`border-t border-line hover:bg-porcelain/60 ${canEdit ? "cursor-pointer" : ""}`}
                 >
                   <td className="px-4 py-3 font-medium text-ink flex items-center gap-2">
                     <PackageOpen size={14} className="text-jade-500 shrink-0" />
@@ -182,15 +189,17 @@ export default function Samples({ session }) {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget(s);
-                      }}
-                      className="p-1.5 rounded-md text-subink hover:bg-white hover:text-clay-600"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(s);
+                        }}
+                        className="p-1.5 rounded-md text-subink hover:bg-white hover:text-clay-600"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -1,11 +1,56 @@
 import { useEffect, useMemo, useState } from "react";
-import { Building2, MessagesSquare, PackageOpen, FileText, Flame, CalendarClock, History } from "lucide-react";
+import { Building2, MessagesSquare, PackageOpen, FileText, Flame, CalendarClock, History, Image as ImageIcon } from "lucide-react";
 import { clientsDB, quotesDB, samplesDB, consultationsDB, activityLogsDB } from "../lib/db";
+import { fetchLayoutItems } from "../lib/dashboardLayout";
 import { supabase } from "../lib/supabaseClient";
 import { ACTIVE_CLIENT_STATUS, HOT_CLIENT_STATUS, CLIENT_STATUS_COLOR, IMPORTANCE_COLOR } from "../lib/constants";
 import { formatDate, todayISO } from "../lib/utils";
 import { StatCard, EmptyState } from "../components/ui/Basics";
 import Badge from "../components/ui/Badge";
+
+function LayoutItemView({ item }) {
+  const style = item.style_json || {};
+  if (item.item_type === "text") {
+    return (
+      <div
+        className="w-full h-full flex px-1"
+        style={{
+          fontSize: style.fontSize || 16,
+          color: style.color || "#1f2937",
+          fontWeight: style.fontWeight || "500",
+          justifyContent: style.align === "center" ? "center" : style.align === "right" ? "flex-end" : "flex-start",
+          alignItems: "center",
+          textAlign: style.align || "left",
+        }}
+      >
+        {item.content}
+      </div>
+    );
+  }
+  if (item.item_type === "image") {
+    return item.image_url ? (
+      <img
+        src={item.image_url}
+        alt=""
+        className="w-full h-full object-cover"
+        style={{ borderRadius: style.borderRadius ?? 8 }}
+      />
+    ) : (
+      <div className="w-full h-full flex items-center justify-center bg-porcelain text-subink">
+        <ImageIcon size={20} />
+      </div>
+    );
+  }
+  return (
+    <div
+      className="w-full h-full"
+      style={{
+        backgroundColor: style.backgroundColor || "#2F6F62",
+        borderRadius: style.shapeType === "circle" ? "50%" : style.borderRadius ?? 12,
+      }}
+    />
+  );
+}
 
 export default function Dashboard({ onNavigateToClient, onNavigate }) {
   const [clients, setClients] = useState([]);
@@ -13,6 +58,7 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
   const [samples, setSamples] = useState([]);
   const [consultations, setConsultations] = useState([]);
   const [recentLogs, setRecentLogs] = useState([]);
+  const [layoutItems, setLayoutItems] = useState([]);
 
   const loadAll = () => {
     clientsDB.list().then(setClients);
@@ -23,6 +69,10 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
       .list()
       .then((rows) => setRecentLogs(rows.sort((a, b) => new Date(b.ts) - new Date(a.ts)).slice(0, 10)));
   };
+
+  useEffect(() => {
+    fetchLayoutItems().then(setLayoutItems);
+  }, []);
 
   useEffect(() => {
     loadAll();
@@ -89,6 +139,22 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
           {formatDate(today)} 기준 영업 현황입니다.
         </p>
       </div>
+
+      {layoutItems.length > 0 && (
+        <div className="overflow-x-auto mb-8">
+          <div className="relative" style={{ width: 1160, height: 420, maxWidth: "100%" }}>
+            {layoutItems.map((item) => (
+              <div
+                key={item.id}
+                className="absolute"
+                style={{ left: item.x, top: item.y, width: item.width, height: item.height }}
+              >
+                <LayoutItemView item={item} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <StatCard

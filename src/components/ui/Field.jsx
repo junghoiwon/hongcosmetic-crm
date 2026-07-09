@@ -42,11 +42,15 @@ export function Select({ options, placeholder, ...props }) {
   return (
     <select {...props} className={`${baseInput} ${props.className || ""}`}>
       {placeholder && <option value="">{placeholder}</option>}
-      {options.map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
-        </option>
-      ))}
+      {options.map((opt) => {
+        const value = typeof opt === "object" ? opt.value : opt;
+        const label = typeof opt === "object" ? opt.label : opt;
+        return (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        );
+      })}
     </select>
   );
 }

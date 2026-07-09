@@ -18,6 +18,10 @@ dist-ssr
 .env.*.local
 !.env.example
 
+# Supabase CLI 로컬 캐시/링크 정보 (프로젝트 ref, pooler 주소 등 — 소스 아님)
+supabase/.temp
+supabase/supabase
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

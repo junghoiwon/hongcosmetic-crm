@@ -6,10 +6,12 @@ import { Menu, X,
   PackageOpen,
   History,
   Settings as SettingsIcon,
-  ChevronDown,
+  UserCog,
+  LayoutTemplate,
+  LogOut,
 } from "lucide-react";
-import { useState } from "react";
-import { ROLES, ROLE_LABELS, isAdmin } from "../lib/session";
+import { ROLE_LABELS } from "../lib/session";
+import { canAccess, isAdminProfile } from "../lib/permissions";
 
 const NAV = [
   { key: "dashboard", icon: LayoutGrid },
@@ -19,10 +21,11 @@ const NAV = [
   { key: "samples", icon: PackageOpen },
 ];
 
-export default function Sidebar({ current, onNavigate, settings, session, onSessionChange, mobileOpen, onCloseMobile }) {
-  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+export default function Sidebar({ current, onNavigate, settings, session, permissionMap, onLogout, mobileOpen, onCloseMobile }) {
   const menuLabels = settings?.menuLabels || {};
-  const admin = isAdmin(session);
+  const admin = isAdminProfile(session);
+  const canView = (menuKey) => canAccess(session, permissionMap, menuKey, "view");
+  const visibleNav = NAV.filter((item) => canView(item.key));
 
   const navigate = (key) => {
     onNavigate(key);
@@ -70,7 +73,7 @@ export default function Sidebar({ current, onNavigate, settings, session, onSess
       </div>
 
       <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
-        {NAV.map(({ key, icon: Icon }) => {
+        {visibleNav.map(({ key, icon: Icon }) => {
           const active = current === key;
           return (
             <button
@@ -92,21 +95,23 @@ export default function Sidebar({ current, onNavigate, settings, session, onSess
         })}
 
         <div className="pt-2 mt-2 border-t border-line space-y-0.5">
-          <button
-            onClick={() => navigate("logs")}
-            style={
-              current === "logs"
-                ? { backgroundColor: "var(--brand-primary-soft)", color: "var(--brand-primary)" }
-                : undefined
-            }
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-              current === "logs" ? "font-medium" : "text-subink hover:bg-porcelain hover:text-ink"
-            }`}
-          >
-            <History size={17} strokeWidth={current === "logs" ? 2.3 : 1.8} />
-            업데이트 로그
-          </button>
-          {admin && (
+          {canView("logs") && (
+            <button
+              onClick={() => navigate("logs")}
+              style={
+                current === "logs"
+                  ? { backgroundColor: "var(--brand-primary-soft)", color: "var(--brand-primary)" }
+                  : undefined
+              }
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                current === "logs" ? "font-medium" : "text-subink hover:bg-porcelain hover:text-ink"
+              }`}
+            >
+              <History size={17} strokeWidth={current === "logs" ? 2.3 : 1.8} />
+              업데이트 로그
+            </button>
+          )}
+          {canView("settings") && (
             <button
               onClick={() => navigate("settings")}
               style={
@@ -122,50 +127,59 @@ export default function Sidebar({ current, onNavigate, settings, session, onSess
               설정
             </button>
           )}
+          {admin && (
+            <button
+              onClick={() => navigate("users")}
+              style={
+                current === "users"
+                  ? { backgroundColor: "var(--brand-primary-soft)", color: "var(--brand-primary)" }
+                  : undefined
+              }
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                current === "users" ? "font-medium" : "text-subink hover:bg-porcelain hover:text-ink"
+              }`}
+            >
+              <UserCog size={17} strokeWidth={current === "users" ? 2.3 : 1.8} />
+              사용자관리
+            </button>
+          )}
+          {admin && (
+            <button
+              onClick={() => navigate("layout")}
+              style={
+                current === "layout"
+                  ? { backgroundColor: "var(--brand-primary-soft)", color: "var(--brand-primary)" }
+                  : undefined
+              }
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                current === "layout" ? "font-medium" : "text-subink hover:bg-porcelain hover:text-ink"
+              }`}
+            >
+              <LayoutTemplate size={17} strokeWidth={current === "layout" ? 2.3 : 1.8} />
+              화면 편집
+            </button>
+          )}
         </div>
       </nav>
 
-      <div className="px-3 py-4 border-t border-line relative">
-        <button
-          onClick={() => setRoleMenuOpen((v) => !v)}
-          className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-porcelain text-left"
-        >
+      <div className="px-3 py-4 border-t border-line">
+        <div className="flex items-center justify-between gap-2 px-3 py-2">
           <span className="min-w-0">
             <span className="block text-sm font-medium text-ink truncate">{session?.name}</span>
-            <span className="block text-[11px] text-subink">{ROLE_LABELS[session?.role]}</span>
+            <span className="block text-[11px] text-subink">
+              {ROLE_LABELS[session?.role] || session?.role}
+              {admin ? " · 관리자" : ""}
+            </span>
           </span>
-          <ChevronDown size={14} className="text-subink shrink-0" />
-        </button>
-
-        {roleMenuOpen && (
-          <div className="absolute bottom-full left-3 right-3 mb-1 bg-white border border-line rounded-lg shadow-card p-2.5 z-10 space-y-2">
-            <p className="text-[11px] text-subink px-0.5">
-              데모용 사용자 전환 (실제 로그인 연동 예정)
-            </p>
-            <input
-              value={session?.name || ""}
-              onChange={(e) => onSessionChange({ ...session, name: e.target.value })}
-              placeholder="담당자 이름"
-              className="w-full px-2 py-1.5 rounded-md border border-line text-sm outline-none focus:border-jade-500"
-            />
-            <div className="space-y-0.5">
-              {ROLES.map((r) => (
-                <button
-                  key={r}
-                  onClick={() => {
-                    onSessionChange({ ...session, role: r });
-                    setRoleMenuOpen(false);
-                  }}
-                  className={`w-full text-left px-2 py-1.5 rounded-md text-sm hover:bg-porcelain ${
-                    session?.role === r ? "text-jade-600 font-medium" : "text-ink"
-                  }`}
-                >
-                  {ROLE_LABELS[r]}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+          <button
+            onClick={onLogout}
+            title="로그아웃"
+            aria-label="로그아웃"
+            className="p-1.5 rounded-md text-subink hover:text-clay-600 hover:bg-clay-50 shrink-0"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
       </div>
     </aside>
     </>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, FileText, Search } from "lucide-react";
 import { quotesDB, clientsDB, productsDB, logActivity } from "../lib/db";
+import { canAccess } from "../lib/permissions";
 import { QUOTE_STATUS, QUOTE_STATUS_COLOR, CURRENCY } from "../lib/constants";
 import { formatMoney, formatDate, todayISO } from "../lib/utils";
 import Modal from "../components/ui/Modal";
@@ -19,7 +20,7 @@ const EMPTY = {
   memo: "",
 };
 
-export default function Quotes({ session }) {
+export default function Quotes({ session, permissionMap }) {
   const [quotes, setQuotes] = useState([]);
   const [clients, setClients] = useState([]);
   const [products, setProducts] = useState([]);
@@ -28,6 +29,10 @@ export default function Quotes({ session }) {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const canCreate = canAccess(session, permissionMap, "quotes", "create");
+  const canEdit = canAccess(session, permissionMap, "quotes", "edit");
+  const canDelete = canAccess(session, permissionMap, "quotes", "delete");
 
   const load = () => {
     quotesDB.list().then((rows) =>
@@ -126,9 +131,11 @@ export default function Quotes({ session }) {
           <h1 className="font-display text-2xl font-semibold text-ink">견적 관리</h1>
           <p className="text-sm text-subink mt-1">거래처별 견적 발송 현황을 관리합니다.</p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus size={16} /> 견적 작성
-        </Button>
+        {canCreate && (
+          <Button onClick={openCreate}>
+            <Plus size={16} /> 견적 작성
+          </Button>
+        )}
       </div>
 
       <div className="relative max-w-sm mb-4">
@@ -148,7 +155,7 @@ export default function Quotes({ session }) {
             quotes.length === 0 ? "거래처와 제품을 선택해 견적서를 작성해보세요." : "다른 검색어를 시도해보세요."
           }
           action={
-            quotes.length === 0 && (
+            quotes.length === 0 && canCreate && (
               <Button onClick={openCreate}>
                 <Plus size={16} /> 견적 작성
               </Button>
@@ -174,8 +181,8 @@ export default function Quotes({ session }) {
               {filteredQuotes.map((q) => (
                 <tr
                   key={q.id}
-                  onClick={() => openEdit(q)}
-                  className="border-t border-line hover:bg-porcelain/60 cursor-pointer"
+                  onClick={canEdit ? () => openEdit(q) : undefined}
+                  className={`border-t border-line hover:bg-porcelain/60 ${canEdit ? "cursor-pointer" : ""}`}
                 >
                   <td className="px-4 py-3 font-medium text-ink flex items-center gap-2">
                     <FileText size={14} className="text-jade-500 shrink-0" />
@@ -192,15 +199,17 @@ export default function Quotes({ session }) {
                     <Badge className={QUOTE_STATUS_COLOR[q.status]}>{q.status}</Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget(q);
-                      }}
-                      className="p-1.5 rounded-md text-subink hover:bg-white hover:text-clay-600"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(q);
+                        }}
+                        className="p-1.5 rounded-md text-subink hover:bg-white hover:text-clay-600"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

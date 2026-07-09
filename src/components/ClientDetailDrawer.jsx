@@ -7,7 +7,7 @@ import Badge from "./ui/Badge";
 import { Field, TextArea, TextInput } from "./ui/Field";
 import { Button, ConfirmDialog } from "./ui/Basics";
 
-export default function ClientDetailDrawer({ client, onClose, onEdit, session }) {
+export default function ClientDetailDrawer({ client, onClose, onEdit, session, canEdit, canCreate, canDelete }) {
   const [consultations, setConsultations] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [samples, setSamples] = useState([]);
@@ -81,13 +81,15 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session })
             <p className="text-sm text-subink">{client.country} · {client.contactName}</p>
           </div>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => onEdit(client)}
-              className="p-1.5 rounded-full text-subink hover:bg-porcelain hover:text-jade-600"
-              aria-label="수정"
-            >
-              <Pencil size={17} />
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => onEdit(client)}
+                className="p-1.5 rounded-full text-subink hover:bg-porcelain hover:text-jade-600"
+                aria-label="수정"
+              >
+                <Pencil size={17} />
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-1.5 rounded-full text-subink hover:bg-porcelain hover:text-ink"
@@ -145,27 +147,29 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session })
           <section>
             <h3 className="font-display text-sm font-semibold text-ink mb-3">상담 이력</h3>
 
-            <form onSubmit={addNote} className="bg-white border border-line rounded-card p-4 mb-4 space-y-3">
-              <Field label="새 상담 내용">
-                <TextArea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="오늘 나눈 상담 내용을 기록하세요."
-                />
-              </Field>
-              <Field label="다음 연락일">
-                <TextInput
-                  type="date"
-                  value={nextContactDate}
-                  onChange={(e) => setNextContactDate(e.target.value)}
-                />
-              </Field>
-              <div className="flex justify-end">
-                <Button type="submit" size="sm">
-                  <Plus size={14} /> 기록 추가
-                </Button>
-              </div>
-            </form>
+            {canCreate && (
+              <form onSubmit={addNote} className="bg-white border border-line rounded-card p-4 mb-4 space-y-3">
+                <Field label="새 상담 내용">
+                  <TextArea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="오늘 나눈 상담 내용을 기록하세요."
+                  />
+                </Field>
+                <Field label="다음 연락일">
+                  <TextInput
+                    type="date"
+                    value={nextContactDate}
+                    onChange={(e) => setNextContactDate(e.target.value)}
+                  />
+                </Field>
+                <div className="flex justify-end">
+                  <Button type="submit" size="sm">
+                    <Plus size={14} /> 기록 추가
+                  </Button>
+                </div>
+              </form>
+            )}
 
             <div className="space-y-3">
               {consultations.length === 0 && (
@@ -186,19 +190,23 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session })
                           다음 연락 {formatDate(c.nextContactDate)}
                         </Badge>
                       )}
-                      <button
-                        onClick={() => togglePin(c)}
-                        className={`p-1 rounded-md ${c.pinned ? "text-gold-500" : "text-subink hover:text-gold-500"}`}
-                        title={c.pinned ? "고정 해제" : "중요 내용 고정"}
-                      >
-                        {c.pinned ? <Pin size={14} fill="currentColor" /> : <PinOff size={14} />}
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(c)}
-                        className="p-1 rounded-md text-subink hover:text-clay-600"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {canEdit && (
+                        <button
+                          onClick={() => togglePin(c)}
+                          className={`p-1 rounded-md ${c.pinned ? "text-gold-500" : "text-subink hover:text-gold-500"}`}
+                          title={c.pinned ? "고정 해제" : "중요 내용 고정"}
+                        >
+                          {c.pinned ? <Pin size={14} fill="currentColor" /> : <PinOff size={14} />}
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          onClick={() => setDeleteTarget(c)}
+                          className="p-1 rounded-md text-subink hover:text-clay-600"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                   <p className="text-sm text-ink whitespace-pre-wrap">{c.content}</p>

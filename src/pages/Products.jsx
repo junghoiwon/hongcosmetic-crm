@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, FlaskConical, Search } from "lucide-react";
 import { productsDB, logActivity } from "../lib/db";
+import { canAccess } from "../lib/permissions";
 import { formatMoney, formatNumber } from "../lib/utils";
 import Modal from "../components/ui/Modal";
 import { Field, TextInput, NumberInput, TextArea } from "../components/ui/Field";
@@ -19,13 +20,17 @@ const EMPTY = {
   note: "",
 };
 
-export default function Products({ session }) {
+export default function Products({ session, permissionMap }) {
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const canCreate = canAccess(session, permissionMap, "products", "create");
+  const canEdit = canAccess(session, permissionMap, "products", "edit");
+  const canDelete = canAccess(session, permissionMap, "products", "delete");
 
   const load = () => productsDB.list().then((rows) =>
     setProducts(rows.sort((a, b) => a.name.localeCompare(b.name, "ko")))
@@ -121,9 +126,11 @@ export default function Products({ session }) {
           <h1 className="font-display text-2xl font-semibold text-ink">제품 관리</h1>
           <p className="text-sm text-subink mt-1">공급 제품과 수량별 단가를 관리합니다.</p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus size={16} /> 제품 등록
-        </Button>
+        {canCreate && (
+          <Button onClick={openCreate}>
+            <Plus size={16} /> 제품 등록
+          </Button>
+        )}
       </div>
 
       <div className="relative max-w-sm mb-4">
@@ -145,7 +152,7 @@ export default function Products({ session }) {
               : "다른 검색어를 시도해보세요."
           }
           action={
-            products.length === 0 && (
+            products.length === 0 && canCreate && (
               <Button onClick={openCreate}>
                 <Plus size={16} /> 제품 등록
               </Button>
@@ -186,18 +193,22 @@ export default function Products({ session }) {
                   <td className="px-4 py-3 text-subink">{p.hsCode || "-"}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
-                      <button
-                        onClick={() => openEdit(p)}
-                        className="p-1.5 rounded-md text-subink hover:bg-white hover:text-jade-600"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(p)}
-                        className="p-1.5 rounded-md text-subink hover:bg-white hover:text-clay-600"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {canEdit && (
+                        <button
+                          onClick={() => openEdit(p)}
+                          className="p-1.5 rounded-md text-subink hover:bg-white hover:text-jade-600"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          onClick={() => setDeleteTarget(p)}
+                          className="p-1.5 rounded-md text-subink hover:bg-white hover:text-clay-600"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
