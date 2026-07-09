@@ -1,16 +1,24 @@
-import { useEffect, useRef, useState } from "react";
-import { Type, ImageIcon, Square, Trash2, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Type, ImageIcon, Square, LayoutDashboard, Trash2, Upload, Eye, EyeOff, RotateCcw } from "lucide-react";
 import {
   fetchAllLayoutItemsForEditor,
   createLayoutItem,
   updateLayoutItem,
   deleteLayoutItem,
+  BUILTIN_WIDGETS,
+  WIDGET_DEFAULT_LAYOUT,
+  SIZE_PRESETS,
 } from "../lib/dashboardLayout";
 import { Field, TextArea, Select, NumberInput } from "../components/ui/Field";
 import { Button, ConfirmDialog } from "../components/ui/Basics";
 
 const CANVAS_WIDTH = 1160;
-const CANVAS_HEIGHT = 420;
+const MIN_CANVAS_HEIGHT = 420;
+const GRID_SIZE = 10;
+
+function snap(value) {
+  return Math.round(value / GRID_SIZE) * GRID_SIZE;
+}
 
 const DEFAULTS = {
   text: {
@@ -34,7 +42,7 @@ const DEFAULTS = {
   },
 };
 
-const TYPE_LABELS = { text: "텍스트", image: "이미지", shape: "도형" };
+const TYPE_LABELS = { text: "텍스트", image: "이미지", shape: "도형", widget: "기존 대시보드 요소" };
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -51,6 +59,14 @@ function readFileAsDataUrl(file) {
 
 function ItemPreview({ item }) {
   const style = item.style_json || {};
+  if (item.item_type === "widget") {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-jade-500/50 bg-jade-50/60 text-jade-700 px-2 text-center pointer-events-none">
+        <LayoutDashboard size={16} />
+        <span className="text-xs font-medium leading-tight">{BUILTIN_WIDGETS[item.content] || item.content}</span>
+      </div>
+    );
+  }
   if (item.item_type === "text") {
     return (
       <div
@@ -99,6 +115,7 @@ export default function LayoutEditor() {
   const [selectedId, setSelectedId] = useState(null);
   const [draft, setDraft] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const dragRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -107,6 +124,11 @@ export default function LayoutEditor() {
   useEffect(() => {
     load();
   }, []);
+
+  const canvasHeight = useMemo(
+    () => Math.max(MIN_CANVAS_HEIGHT, ...items.map((i) => i.y + i.height), 0) + 40,
+    [items]
+  );
 
   const selected = items.find((i) => i.id === selectedId) || null;
 
@@ -177,14 +199,14 @@ export default function LayoutEditor() {
     const dx = e.clientX - d.startX;
     const dy = e.clientY - d.startY;
     if (d.mode === "move") {
-      const nextX = clamp(d.originX + dx, 0, Math.max(0, CANVAS_WIDTH - d.width));
-      const nextY = clamp(d.originY + dy, 0, Math.max(0, CANVAS_HEIGHT - d.height));
+      const nextX = snap(clamp(d.originX + dx, 0, Math.max(0, CANVAS_WIDTH - d.width)));
+      const nextY = snap(Math.max(0, d.originY + dy));
       d.currentX = nextX;
       d.currentY = nextY;
       patchLocal(d.id, { x: nextX, y: nextY });
     } else {
-      const nextWidth = Math.max(40, d.width + dx);
-      const nextHeight = Math.max(30, d.height + dy);
+      const nextWidth = snap(Math.max(40, d.width + dx));
+      const nextHeight = snap(Math.max(30, d.height + dy));
       d.currentWidth = nextWidth;
       d.currentHeight = nextHeight;
       patchLocal(d.id, { width: nextWidth, height: nextHeight });
@@ -236,6 +258,23 @@ export default function LayoutEditor() {
 
   const setStyle = (patch) => setDraft((d) => ({ ...d, style_json: { ...d.style_json, ...patch } }));
 
+  const applyPreset = async (preset) => {
+    if (!selected) return;
+    const updated = await updateLayoutItem(selected.id, { width: preset.width, height: preset.height });
+    patchLocal(selected.id, updated);
+    setDraft((d) => ({ ...d, width: updated.width, height: updated.height }));
+  };
+
+  const resetWidgetLayout = async () => {
+    setResetConfirmOpen(false);
+    const widgetItems = items.filter((i) => i.item_type === "widget" && WIDGET_DEFAULT_LAYOUT[i.content]);
+    await Promise.all(
+      widgetItems.map((item) => updateLayoutItem(item.id, { ...WIDGET_DEFAULT_LAYOUT[item.content], is_active: true }))
+    );
+    setSelectedId(null);
+    load();
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -255,14 +294,22 @@ export default function LayoutEditor() {
           <Button variant="ghost" onClick={() => addItem("shape")}>
             <Square size={15} /> 도형 추가
           </Button>
+          <Button variant="ghost" onClick={() => setResetConfirmOpen(true)}>
+            <RotateCcw size={15} /> 기본 배치로 초기화
+          </Button>
         </div>
       </div>
 
+      <p className="text-xs text-subink mb-2">
+        점선 테두리의 초록색 칸은 대시보드에 이미 있던 기존 요소(통계 카드 등)입니다. 드래그·크기조절은
+        10px 단위로 자동 정렬(스냅)되고, 아래 편집 패널의 크기 버튼으로 한 번에 맞출 수도 있습니다.
+        정렬이 꼬였다면 "기본 배치로 초기화"로 되돌리세요.
+      </p>
       <div className="overflow-x-auto mb-6">
         <div
           onMouseDown={() => setSelectedId(null)}
           className="relative bg-white border border-line rounded-card shadow-card"
-          style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT }}
+          style={{ width: CANVAS_WIDTH, height: canvasHeight }}
         >
           {items.map((item) => (
             <div
@@ -270,7 +317,7 @@ export default function LayoutEditor() {
               onMouseDown={(e) => beginDrag(e, item, "move")}
               className={`absolute cursor-move border ${
                 selectedId === item.id ? "border-jade-500 ring-2 ring-jade-500/25" : "border-transparent"
-              }`}
+              } ${item.is_active ? "" : "opacity-35"}`}
               style={{ left: item.x, top: item.y, width: item.width, height: item.height }}
             >
               <ItemPreview item={item} />
@@ -294,15 +341,39 @@ export default function LayoutEditor() {
             <h2 className="font-display text-sm font-semibold text-ink">
               선택한 요소 편집 · {TYPE_LABELS[selected.item_type]}
             </h2>
-            <button
-              onClick={() => setDeleteTarget(selected)}
-              className="p-1.5 rounded-md text-subink hover:bg-porcelain hover:text-clay-600"
-            >
-              <Trash2 size={15} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setDraft({ ...draft, is_active: !draft.is_active })}
+                title={draft.is_active ? "화면에서 숨기기" : "화면에 표시하기"}
+                className="p-1.5 rounded-md text-subink hover:bg-porcelain hover:text-jade-600"
+              >
+                {draft.is_active ? <Eye size={15} /> : <EyeOff size={15} />}
+              </button>
+              {selected.item_type !== "widget" && (
+                <button
+                  onClick={() => setDeleteTarget(selected)}
+                  className="p-1.5 rounded-md text-subink hover:bg-porcelain hover:text-clay-600"
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          {!draft.is_active && (
+            <p className="text-xs text-clay-600 mb-4">
+              현재 대시보드 화면에서 숨겨져 있습니다. "저장"을 눌러야 상태가 반영됩니다.
+            </p>
+          )}
+
+          {selected.item_type === "widget" && (
+            <p className="text-xs text-subink mb-4">
+              대시보드 기본 요소는 삭제할 수 없고, 위치·크기 변경과 표시/숨김만 가능합니다.
+            </p>
+          )}
+
+          <div className="grid grid-cols-2 gap-4 mb-3">
             <Field label="X">
               <NumberInput value={draft.x} onChange={(e) => setDraft({ ...draft, x: e.target.value })} />
             </Field>
@@ -315,6 +386,15 @@ export default function LayoutEditor() {
             <Field label="높이">
               <NumberInput value={draft.height} onChange={(e) => setDraft({ ...draft, height: e.target.value })} />
             </Field>
+          </div>
+
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-xs text-subink">빠른 크기:</span>
+            {SIZE_PRESETS.map((preset) => (
+              <Button key={preset.label} type="button" variant="ghost" size="sm" onClick={() => applyPreset(preset)}>
+                {preset.label} ({preset.width}×{preset.height})
+              </Button>
+            ))}
           </div>
 
           {selected.item_type === "text" && (
@@ -421,6 +501,14 @@ export default function LayoutEditor() {
         description="삭제된 요소는 복구할 수 없습니다."
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        title="기본 배치로 초기화할까요?"
+        description="통계 카드 등 기존 대시보드 요소들의 위치와 크기가 처음 상태로 되돌아갑니다. 직접 추가한 텍스트/이미지/도형은 그대로 유지됩니다."
+        onConfirm={resetWidgetLayout}
+        onCancel={() => setResetConfirmOpen(false)}
       />
     </div>
   );

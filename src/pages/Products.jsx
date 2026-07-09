@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, FlaskConical, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, FlaskConical, Search, FileSpreadsheet } from "lucide-react";
 import { productsDB, logActivity } from "../lib/db";
 import { canAccess } from "../lib/permissions";
 import { formatMoney, formatNumber } from "../lib/utils";
 import Modal from "../components/ui/Modal";
+import ProductExcelUploadModal from "../components/ProductExcelUploadModal";
 import { Field, TextInput, NumberInput, TextArea } from "../components/ui/Field";
 import { Button, EmptyState, ConfirmDialog } from "../components/ui/Basics";
 
 const EMPTY = {
   name: "",
+  productCode: "",
   capacity: "",
   cost: "",
   basePrice: "",
@@ -17,6 +19,7 @@ const EMPTY = {
   moq: "",
   boxQty: "",
   hsCode: "",
+  currentStock: "",
   note: "",
 };
 
@@ -27,6 +30,7 @@ export default function Products({ session, permissionMap }) {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [excelModalOpen, setExcelModalOpen] = useState(false);
 
   const canCreate = canAccess(session, permissionMap, "products", "create");
   const canEdit = canAccess(session, permissionMap, "products", "edit");
@@ -44,7 +48,7 @@ export default function Products({ session, permissionMap }) {
     const q = search.trim().toLowerCase();
     if (!q) return products;
     return products.filter((p) =>
-      [p.name, p.hsCode, p.capacity, p.note].filter(Boolean).some((v) => v.toLowerCase().includes(q))
+      [p.name, p.productCode, p.hsCode, p.capacity, p.note].filter(Boolean).some((v) => v.toLowerCase().includes(q))
     );
   }, [products, search]);
 
@@ -70,6 +74,7 @@ export default function Products({ session, permissionMap }) {
       price2000: form.price2000 === "" ? "" : Number(form.price2000),
       moq: form.moq === "" ? "" : Number(form.moq),
       boxQty: form.boxQty === "" ? "" : Number(form.boxQty),
+      currentStock: form.currentStock === "" ? "" : Number(form.currentStock),
     };
     const actor = session?.name || "사용자";
     if (editing) {
@@ -94,6 +99,14 @@ export default function Products({ session, permissionMap }) {
           actor,
           action: "제품 정보 수정",
           summary: `${payload.name} 제품 정보 수정`,
+        });
+      }
+      if (editing.currentStock !== payload.currentStock) {
+        await logActivity({
+          actor,
+          action: "재고 수정",
+          summary: `${payload.name} 재고 수정`,
+          detail: `${editing.currentStock || 0}개 → ${payload.currentStock || 0}개`,
         });
       }
     } else {
@@ -126,11 +139,18 @@ export default function Products({ session, permissionMap }) {
           <h1 className="font-display text-2xl font-semibold text-ink">제품 관리</h1>
           <p className="text-sm text-subink mt-1">공급 제품과 수량별 단가를 관리합니다.</p>
         </div>
-        {canCreate && (
-          <Button onClick={openCreate}>
-            <Plus size={16} /> 제품 등록
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <Button variant="ghost" onClick={() => setExcelModalOpen(true)}>
+              <FileSpreadsheet size={15} /> 엑셀 업로드
+            </Button>
+          )}
+          {canCreate && (
+            <Button onClick={openCreate}>
+              <Plus size={16} /> 제품 등록
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="relative max-w-sm mb-4">
@@ -165,6 +185,7 @@ export default function Products({ session, permissionMap }) {
             <thead>
               <tr className="bg-porcelain text-subink text-xs">
                 <th className="text-left font-medium px-4 py-3">제품명</th>
+                <th className="text-left font-medium px-4 py-3">제품코드</th>
                 <th className="text-left font-medium px-4 py-3">용량</th>
                 <th className="text-right font-medium px-4 py-3">원가</th>
                 <th className="text-right font-medium px-4 py-3">기본 공급가</th>
@@ -172,6 +193,7 @@ export default function Products({ session, permissionMap }) {
                 <th className="text-right font-medium px-4 py-3">2,000개 단가</th>
                 <th className="text-right font-medium px-4 py-3">MOQ</th>
                 <th className="text-right font-medium px-4 py-3">박스 입수</th>
+                <th className="text-right font-medium px-4 py-3">현재고</th>
                 <th className="text-left font-medium px-4 py-3">HS CODE</th>
                 <th className="px-4 py-3 w-20"></th>
               </tr>
@@ -183,6 +205,7 @@ export default function Products({ session, permissionMap }) {
                     <FlaskConical size={14} className="text-jade-500 shrink-0" />
                     {p.name}
                   </td>
+                  <td className="px-4 py-3 text-subink">{p.productCode || "-"}</td>
                   <td className="px-4 py-3 text-subink">{p.capacity || "-"}</td>
                   <td className="px-4 py-3 text-right text-ink">{formatMoney(p.cost)}</td>
                   <td className="px-4 py-3 text-right text-ink">{formatMoney(p.basePrice)}</td>
@@ -190,6 +213,7 @@ export default function Products({ session, permissionMap }) {
                   <td className="px-4 py-3 text-right text-ink">{formatMoney(p.price2000)}</td>
                   <td className="px-4 py-3 text-right text-subink">{formatNumber(p.moq)}</td>
                   <td className="px-4 py-3 text-right text-subink">{formatNumber(p.boxQty)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-ink">{formatNumber(p.currentStock)}</td>
                   <td className="px-4 py-3 text-subink">{p.hsCode || "-"}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
@@ -232,6 +256,13 @@ export default function Products({ session, permissionMap }) {
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="예: 수분 진정 크림"
+              />
+            </Field>
+            <Field label="제품코드">
+              <TextInput
+                value={form.productCode}
+                onChange={(e) => setForm({ ...form, productCode: e.target.value })}
+                placeholder="예: HC-CR-001"
               />
             </Field>
             <Field label="용량">
@@ -284,6 +315,12 @@ export default function Products({ session, permissionMap }) {
                 onChange={(e) => setForm({ ...form, boxQty: e.target.value })}
               />
             </Field>
+            <Field label="현재고" hint="엑셀 업로드로 일괄 반영할 수도 있습니다.">
+              <NumberInput
+                value={form.currentStock}
+                onChange={(e) => setForm({ ...form, currentStock: e.target.value })}
+              />
+            </Field>
             <Field label="비고" className="col-span-2">
               <TextArea
                 value={form.note}
@@ -307,6 +344,15 @@ export default function Products({ session, permissionMap }) {
         description={`"${deleteTarget?.name}" 제품이 영구적으로 삭제됩니다. 이미 작성된 견적서에는 영향을 주지 않습니다.`}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ProductExcelUploadModal
+        open={excelModalOpen}
+        onClose={() => setExcelModalOpen(false)}
+        products={products}
+        canCreate={canCreate}
+        actor={session?.name}
+        onApplied={load}
       />
     </div>
   );

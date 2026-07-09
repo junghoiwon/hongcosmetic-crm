@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ShieldAlert, Upload, Image as ImageIcon } from "lucide-react";
-import { getSettings, updateSettings, logActivity, DEFAULT_MENU_LABELS } from "../lib/db";
+import { getSettings, updateSettings, logActivity } from "../lib/db";
 import { isAdmin } from "../lib/session";
 import { Field, TextInput } from "../components/ui/Field";
 import { Button } from "../components/ui/Basics";
@@ -19,6 +19,8 @@ export default function Settings({ session, onSettingsChange }) {
   const [saved, setSaved] = useState(false);
   const logoInputRef = useRef(null);
   const faviconInputRef = useRef(null);
+  const mainBgImageInputRef = useRef(null);
+  const sidebarBgImageInputRef = useRef(null);
 
   useEffect(() => {
     getSettings().then(setForm);
@@ -41,8 +43,6 @@ export default function Settings({ session, onSettingsChange }) {
   if (!form) return null;
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
-  const setMenuLabel = (key, label) =>
-    setForm((f) => ({ ...f, menuLabels: { ...f.menuLabels, [key]: label } }));
 
   const handleImage = async (file, key) => {
     if (!file) return;
@@ -175,21 +175,125 @@ export default function Settings({ session, onSettingsChange }) {
           </div>
         </section>
 
-        {/* 메뉴 이름 */}
+        {/* 화면 배경 */}
         <section className="bg-white border border-line rounded-card shadow-card p-5">
-          <h2 className="font-display text-sm font-semibold text-ink mb-1">메뉴 이름</h2>
+          <h2 className="font-display text-sm font-semibold text-ink mb-1">화면 배경</h2>
           <p className="text-xs text-subink mb-4">
-            왼쪽 사이드바에 표시되는 메뉴 이름을 우리 회사에 맞게 바꿀 수 있습니다.
+            메인 화면과 좌측 메뉴(사이드바)의 배경색/배경 이미지를 바꿀 수 있습니다. 비워두면 기본 배경을
+            사용합니다.
           </p>
           <div className="grid grid-cols-2 gap-4">
-            {Object.keys(DEFAULT_MENU_LABELS).map((key) => (
-              <Field key={key} label={`${DEFAULT_MENU_LABELS[key]} 메뉴`}>
-                <TextInput
-                  value={form.menuLabels?.[key] ?? DEFAULT_MENU_LABELS[key]}
-                  onChange={(e) => setMenuLabel(key, e.target.value)}
+            <Field label="메인 화면 배경색">
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={form.mainBgColor || "#FAF9F5"}
+                  onChange={(e) => set({ mainBgColor: e.target.value })}
+                  className="w-10 h-9 rounded-md border border-line cursor-pointer"
                 />
-              </Field>
-            ))}
+                <TextInput
+                  value={form.mainBgColor}
+                  onChange={(e) => set({ mainBgColor: e.target.value })}
+                  placeholder="기본값 사용"
+                />
+              </div>
+            </Field>
+            <Field label="사이드바 배경색">
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={form.sidebarBgColor || "#FFFFFF"}
+                  onChange={(e) => set({ sidebarBgColor: e.target.value })}
+                  className="w-10 h-9 rounded-md border border-line cursor-pointer"
+                />
+                <TextInput
+                  value={form.sidebarBgColor}
+                  onChange={(e) => set({ sidebarBgColor: e.target.value })}
+                  placeholder="기본값 사용"
+                />
+              </div>
+            </Field>
+
+            <Field label="메인 화면 배경 이미지">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-lg border border-line bg-porcelain flex items-center justify-center overflow-hidden shrink-0">
+                  {form.mainBgImageUrl ? (
+                    <img src={form.mainBgImageUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon size={18} className="text-subink" />
+                  )}
+                </div>
+                <input
+                  ref={mainBgImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleImage(e.target.files?.[0], "mainBgImageUrl")}
+                />
+                <Button type="button" variant="ghost" size="sm" onClick={() => mainBgImageInputRef.current?.click()}>
+                  <Upload size={13} /> 업로드
+                </Button>
+                {form.mainBgImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => set({ mainBgImageUrl: "" })}
+                    className="text-xs text-subink hover:text-clay-600"
+                  >
+                    제거
+                  </button>
+                )}
+              </div>
+            </Field>
+            <Field label="사이드바 배경 이미지">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-lg border border-line bg-porcelain flex items-center justify-center overflow-hidden shrink-0">
+                  {form.sidebarBgImageUrl ? (
+                    <img src={form.sidebarBgImageUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon size={18} className="text-subink" />
+                  )}
+                </div>
+                <input
+                  ref={sidebarBgImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleImage(e.target.files?.[0], "sidebarBgImageUrl")}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => sidebarBgImageInputRef.current?.click()}
+                >
+                  <Upload size={13} /> 업로드
+                </Button>
+                {form.sidebarBgImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => set({ sidebarBgImageUrl: "" })}
+                    className="text-xs text-subink hover:text-clay-600"
+                  >
+                    제거
+                  </button>
+                )}
+              </div>
+            </Field>
+            <Field label="사이드바 메뉴 글자색">
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={form.sidebarMenuTextColor || "#6B665F"}
+                  onChange={(e) => set({ sidebarMenuTextColor: e.target.value })}
+                  className="w-10 h-9 rounded-md border border-line cursor-pointer"
+                />
+                <TextInput
+                  value={form.sidebarMenuTextColor}
+                  onChange={(e) => set({ sidebarMenuTextColor: e.target.value })}
+                  placeholder="기본값 사용"
+                />
+              </div>
+            </Field>
           </div>
         </section>
 

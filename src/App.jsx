@@ -10,6 +10,7 @@ import Settings from "./pages/Settings";
 import UpdateLog from "./pages/UpdateLog";
 import Users from "./pages/Users";
 import LayoutEditor from "./pages/LayoutEditor";
+import MenuEditor from "./pages/MenuEditor";
 import Login from "./pages/Login";
 import { seedDemoData, getSettings, DEFAULT_SETTINGS } from "./lib/db";
 import { getCurrentSession, onAuthStateChange, signOut } from "./lib/auth";
@@ -20,6 +21,7 @@ import {
   canAccess,
   isAdminProfile,
 } from "./lib/permissions";
+import { fetchAllAppMenus } from "./lib/appMenus";
 import { withAlpha } from "./lib/utils";
 import { isSupabaseConfigured } from "./lib/supabaseClient";
 
@@ -55,6 +57,7 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [profileChecked, setProfileChecked] = useState(false);
   const [permissionMap, setPermissionMap] = useState({});
+  const [appMenus, setAppMenus] = useState([]);
 
   // 최초 세션 확인 + 로그인/로그아웃 변화 구독
   useEffect(() => {
@@ -106,6 +109,17 @@ export default function App() {
     return () => {
       active = false;
     };
+  }, [profile]);
+
+  const reloadAppMenus = () => fetchAllAppMenus().then(setAppMenus);
+
+  // 프로필이 활성 상태로 확인되면, 좌측 메뉴 구성도 함께 불러옵니다.
+  useEffect(() => {
+    if (!profile || !profile.is_active) {
+      setAppMenus([]);
+      return;
+    }
+    reloadAppMenus();
   }, [profile]);
 
   // 로그인 + 프로필 확인이 끝난 뒤에만 프로그램 설정을 불러옵니다.
@@ -221,6 +235,9 @@ export default function App() {
     if (page === "layout") {
       return isAdminProfile(session) ? <LayoutEditor /> : accessDenied;
     }
+    if (page === "menu-editor") {
+      return isAdminProfile(session) ? <MenuEditor onMenusChanged={reloadAppMenus} /> : accessDenied;
+    }
     if (!canView(page)) {
       return accessDenied;
     }
@@ -251,14 +268,23 @@ export default function App() {
     }
   };
 
+  const mainBgStyle = {
+    backgroundColor: settings.mainBgColor || undefined,
+    backgroundImage: settings.mainBgImageUrl ? `url(${settings.mainBgImageUrl})` : undefined,
+    backgroundSize: settings.mainBgImageUrl ? "cover" : undefined,
+    backgroundPosition: settings.mainBgImageUrl ? "center" : undefined,
+    backgroundAttachment: settings.mainBgImageUrl ? "fixed" : undefined,
+  };
+
   return (
-    <div className="flex min-h-screen bg-porcelain">
+    <div className="flex min-h-screen bg-porcelain" style={mainBgStyle}>
       <Sidebar
         current={page}
         onNavigate={setPage}
         settings={settings}
         session={session}
         permissionMap={permissionMap}
+        appMenus={appMenus}
         onLogout={() => signOut()}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}

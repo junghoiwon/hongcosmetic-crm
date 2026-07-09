@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Trash2, Building2 } from "lucide-react";
 import { clientsDB, customCountriesDB, saveCustomCountryIfNew, logActivity } from "../lib/db";
+import { recordClientStatusChange } from "../lib/clientStatusHistory";
 import { canAccess } from "../lib/permissions";
 import { CLIENT_STATUS, CLIENT_STATUS_COLOR, IMPORTANCE, IMPORTANCE_COLOR, COUNTRIES } from "../lib/constants";
 import Modal from "../components/ui/Modal";
@@ -92,6 +93,7 @@ export default function Clients({ openClientId, clearOpenClientId, session, perm
     if (editing) {
       await clientsDB.update(editing.id, form);
       if (editing.status !== form.status) {
+        await recordClientStatusChange(editing.id, form.status);
         await logActivity({
           actor,
           action: "거래처 상태 변경",
@@ -106,7 +108,8 @@ export default function Clients({ openClientId, clearOpenClientId, session, perm
         });
       }
     } else {
-      await clientsDB.create(form);
+      const created = await clientsDB.create(form);
+      await recordClientStatusChange(created.id, form.status);
       await logActivity({
         actor,
         action: "신규 거래처 등록",

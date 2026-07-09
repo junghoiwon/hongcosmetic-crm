@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Building2, MessagesSquare, PackageOpen, FileText, Flame, CalendarClock, History, Image as ImageIcon } from "lucide-react";
+import { Building2, MessagesSquare, PackageOpen, FileText, Flame, CalendarClock, History, Route, Image as ImageIcon } from "lucide-react";
 import { clientsDB, quotesDB, samplesDB, consultationsDB, activityLogsDB } from "../lib/db";
 import { fetchLayoutItems } from "../lib/dashboardLayout";
+import { fetchStatusHistoryForClients } from "../lib/clientStatusHistory";
 import { supabase } from "../lib/supabaseClient";
 import { ACTIVE_CLIENT_STATUS, HOT_CLIENT_STATUS, CLIENT_STATUS_COLOR, IMPORTANCE_COLOR } from "../lib/constants";
 import { formatDate, todayISO } from "../lib/utils";
 import { StatCard, EmptyState } from "../components/ui/Basics";
 import Badge from "../components/ui/Badge";
+import ClientProgressTimeline from "../components/ClientProgressTimeline";
 
-function LayoutItemView({ item }) {
+function CustomItemView({ item }) {
   const style = item.style_json || {};
   if (item.item_type === "text") {
     return (
@@ -59,6 +61,7 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
   const [consultations, setConsultations] = useState([]);
   const [recentLogs, setRecentLogs] = useState([]);
   const [layoutItems, setLayoutItems] = useState([]);
+  const [historyByClient, setHistoryByClient] = useState({});
 
   const loadAll = () => {
     clientsDB.list().then(setClients);
@@ -107,6 +110,24 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
     [clients]
   );
 
+  // 거래처 진행 타임라인 위젯: 최근에 업데이트된 거래처 5곳의 진행 단계를 보여줍니다.
+  const progressClients = useMemo(
+    () =>
+      clients
+        .slice()
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+        .slice(0, 5),
+    [clients]
+  );
+
+  useEffect(() => {
+    if (progressClients.length === 0) {
+      setHistoryByClient({});
+      return;
+    }
+    fetchStatusHistoryForClients(progressClients.map((c) => c.id)).then(setHistoryByClient);
+  }, [progressClients]);
+
   const today = todayISO();
 
   const todayFollowUps = useMemo(() => {
@@ -131,6 +152,196 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
 
   const clientMap = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c])), [clients]);
 
+  const canvasHeight = useMemo(
+    () => Math.max(420, ...layoutItems.map((i) => i.y + i.height), 0) + 20,
+    [layoutItems]
+  );
+
+  const renderWidget = (widgetKey) => {
+    switch (widgetKey) {
+      case "stat_clients":
+        return (
+          <StatCard
+            label="전체 거래처"
+            value={`${clients.length}개`}
+            icon={Building2}
+            accent="jade"
+            onClick={() => onNavigate("clients")}
+          />
+        );
+      case "stat_active":
+        return (
+          <StatCard
+            label="진행 중인 상담"
+            value={`${activeCount}건`}
+            icon={MessagesSquare}
+            accent="jade"
+            onClick={() => onNavigate("clients")}
+          />
+        );
+      case "stat_samples":
+        return (
+          <StatCard
+            label="샘플 발송"
+            value={`${samples.length}건`}
+            icon={PackageOpen}
+            accent="gold"
+            onClick={() => onNavigate("samples")}
+          />
+        );
+      case "stat_quotes":
+        return (
+          <StatCard
+            label="견적 발송"
+            value={`${quotes.length}건`}
+            icon={FileText}
+            accent="clay"
+            onClick={() => onNavigate("quotes")}
+          />
+        );
+      case "hot_clients":
+        return (
+          <section className="h-full flex flex-col bg-white border border-line rounded-card shadow-card overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-line shrink-0">
+              <Flame size={16} className="text-clay-500" />
+              <h2 className="font-display text-sm font-semibold text-ink">발주 가능성이 높은 거래처</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {hotClients.length === 0 ? (
+                <div className="p-5">
+                  <EmptyState title="아직 없습니다" description="중요도 '상'이면서 견적/인허가/발주 단계인 거래처가 여기 표시됩니다." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-line">
+                  {hotClients.map((c) => (
+                    <li
+                      key={c.id}
+                      onClick={() => onNavigateToClient(c.id)}
+                      className="flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-porcelain/60 cursor-pointer"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-ink">{c.companyName}</p>
+                        <p className="text-xs text-subink mt-0.5">{c.country} · {c.interestProduct || "관심 제품 미입력"}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Badge className={IMPORTANCE_COLOR[c.importance]}>중요도 {c.importance}</Badge>
+                        <Badge className={CLIENT_STATUS_COLOR[c.status]}>{c.status}</Badge>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        );
+      case "today_followups":
+        return (
+          <section className="h-full flex flex-col bg-white border border-line rounded-card shadow-card overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-line shrink-0">
+              <CalendarClock size={16} className="text-jade-500" />
+              <h2 className="font-display text-sm font-semibold text-ink">오늘 해야 할 후속 연락</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {todayFollowUps.length === 0 ? (
+                <div className="p-5">
+                  <EmptyState title="오늘 예정된 후속 연락이 없습니다" description="상담 이력과 샘플 발송에서 등록한 후속 연락일이 여기 표시됩니다." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-line">
+                  {todayFollowUps.map((item) => {
+                    const client = clientMap[item.clientId];
+                    return (
+                      <li
+                        key={item.id}
+                        onClick={() => client && onNavigateToClient(client.id)}
+                        className="flex items-start justify-between gap-3 px-5 py-3.5 hover:bg-porcelain/60 cursor-pointer"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-ink truncate">
+                            {client?.companyName || "삭제된 거래처"}
+                          </p>
+                          <p className="text-xs text-subink mt-0.5 truncate">{item.detail}</p>
+                        </div>
+                        <Badge className="bg-jade-50 text-jade-600 shrink-0">{item.label}</Badge>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </section>
+        );
+      case "recent_updates":
+        return (
+          <section className="h-full flex flex-col bg-white border border-line rounded-card shadow-card overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-line shrink-0">
+              <div className="flex items-center gap-2">
+                <History size={16} className="text-jade-500" />
+                <h2 className="font-display text-sm font-semibold text-ink">최근 업데이트</h2>
+              </div>
+              <button
+                onClick={() => onNavigate("logs")}
+                className="text-xs font-medium hover:underline"
+                style={{ color: "var(--brand-primary)" }}
+              >
+                전체보기
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {recentLogs.length === 0 ? (
+                <div className="p-5">
+                  <EmptyState title="아직 기록된 변경 이력이 없습니다" description="거래처, 제품, 견적, 샘플, 설정 변경 등이 자동으로 기록됩니다." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-line">
+                  {recentLogs.map((log) => (
+                    <li key={log.id} className="flex items-start gap-3 px-5 py-3">
+                      <Badge className="bg-jade-50 text-jade-600 shrink-0">{log.action}</Badge>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-ink truncate">{log.summary}</p>
+                        <p className="text-xs text-subink mt-0.5">
+                          {formatDate(log.date)} {log.time} · {log.actor}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        );
+      case "client_progress_timeline":
+        return (
+          <section className="h-full flex flex-col bg-white border border-line rounded-card shadow-card overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-line shrink-0">
+              <Route size={16} className="text-jade-500" />
+              <h2 className="font-display text-sm font-semibold text-ink">거래처 진행 현황</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {progressClients.length === 0 ? (
+                <div className="p-5">
+                  <EmptyState title="표시할 거래처가 없습니다" description="거래처를 등록하면 진행 단계가 여기 표시됩니다." />
+                </div>
+              ) : (
+                <div>
+                  {progressClients.map((c) => (
+                    <ClientProgressTimeline
+                      key={c.id}
+                      client={c}
+                      historyRows={historyByClient[c.id] || []}
+                      onClick={() => onNavigateToClient(c.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <div>
       <div className="mb-6">
@@ -140,155 +351,18 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
         </p>
       </div>
 
-      {layoutItems.length > 0 && (
-        <div className="overflow-x-auto mb-8">
-          <div className="relative" style={{ width: 1160, height: 420, maxWidth: "100%" }}>
-            {layoutItems.map((item) => (
-              <div
-                key={item.id}
-                className="absolute"
-                style={{ left: item.x, top: item.y, width: item.width, height: item.height }}
-              >
-                <LayoutItemView item={item} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard
-          label="전체 거래처"
-          value={`${clients.length}개`}
-          icon={Building2}
-          accent="jade"
-          onClick={() => onNavigate("clients")}
-        />
-        <StatCard
-          label="진행 중인 상담"
-          value={`${activeCount}건`}
-          icon={MessagesSquare}
-          accent="jade"
-          onClick={() => onNavigate("clients")}
-        />
-        <StatCard
-          label="샘플 발송"
-          value={`${samples.length}건`}
-          icon={PackageOpen}
-          accent="gold"
-          onClick={() => onNavigate("samples")}
-        />
-        <StatCard
-          label="견적 발송"
-          value={`${quotes.length}건`}
-          icon={FileText}
-          accent="clay"
-          onClick={() => onNavigate("quotes")}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 발주 가능성 높은 거래처 */}
-        <section className="bg-white border border-line rounded-card shadow-card">
-          <div className="flex items-center gap-2 px-5 py-4 border-b border-line">
-            <Flame size={16} className="text-clay-500" />
-            <h2 className="font-display text-sm font-semibold text-ink">발주 가능성이 높은 거래처</h2>
-          </div>
-          {hotClients.length === 0 ? (
-            <div className="p-5">
-              <EmptyState title="아직 없습니다" description="중요도 '상'이면서 견적/인허가/발주 단계인 거래처가 여기 표시됩니다." />
-            </div>
-          ) : (
-            <ul className="divide-y divide-line">
-              {hotClients.map((c) => (
-                <li
-                  key={c.id}
-                  onClick={() => onNavigateToClient(c.id)}
-                  className="flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-porcelain/60 cursor-pointer"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-ink">{c.companyName}</p>
-                    <p className="text-xs text-subink mt-0.5">{c.country} · {c.interestProduct || "관심 제품 미입력"}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <Badge className={IMPORTANCE_COLOR[c.importance]}>중요도 {c.importance}</Badge>
-                    <Badge className={CLIENT_STATUS_COLOR[c.status]}>{c.status}</Badge>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* 오늘 해야 할 후속 연락 */}
-        <section className="bg-white border border-line rounded-card shadow-card">
-          <div className="flex items-center gap-2 px-5 py-4 border-b border-line">
-            <CalendarClock size={16} className="text-jade-500" />
-            <h2 className="font-display text-sm font-semibold text-ink">오늘 해야 할 후속 연락</h2>
-          </div>
-          {todayFollowUps.length === 0 ? (
-            <div className="p-5">
-              <EmptyState title="오늘 예정된 후속 연락이 없습니다" description="상담 이력과 샘플 발송에서 등록한 후속 연락일이 여기 표시됩니다." />
-            </div>
-          ) : (
-            <ul className="divide-y divide-line">
-              {todayFollowUps.map((item) => {
-                const client = clientMap[item.clientId];
-                return (
-                  <li
-                    key={item.id}
-                    onClick={() => client && onNavigateToClient(client.id)}
-                    className="flex items-start justify-between gap-3 px-5 py-3.5 hover:bg-porcelain/60 cursor-pointer"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-ink truncate">
-                        {client?.companyName || "삭제된 거래처"}
-                      </p>
-                      <p className="text-xs text-subink mt-0.5 truncate">{item.detail}</p>
-                    </div>
-                    <Badge className="bg-jade-50 text-jade-600 shrink-0">{item.label}</Badge>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        {/* 최근 업데이트 */}
-        <section className="bg-white border border-line rounded-card shadow-card lg:col-span-2">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-line">
-            <div className="flex items-center gap-2">
-              <History size={16} className="text-jade-500" />
-              <h2 className="font-display text-sm font-semibold text-ink">최근 업데이트</h2>
-            </div>
-            <button
-              onClick={() => onNavigate("logs")}
-              className="text-xs font-medium hover:underline"
-              style={{ color: "var(--brand-primary)" }}
+      <div className="overflow-x-auto mb-8">
+        <div className="relative" style={{ width: 1160, height: canvasHeight, maxWidth: "100%" }}>
+          {layoutItems.map((item) => (
+            <div
+              key={item.id}
+              className="absolute"
+              style={{ left: item.x, top: item.y, width: item.width, height: item.height }}
             >
-              전체보기
-            </button>
-          </div>
-          {recentLogs.length === 0 ? (
-            <div className="p-5">
-              <EmptyState title="아직 기록된 변경 이력이 없습니다" description="거래처, 제품, 견적, 샘플, 설정 변경 등이 자동으로 기록됩니다." />
+              {item.item_type === "widget" ? renderWidget(item.content) : <CustomItemView item={item} />}
             </div>
-          ) : (
-            <ul className="divide-y divide-line">
-              {recentLogs.map((log) => (
-                <li key={log.id} className="flex items-start gap-3 px-5 py-3">
-                  <Badge className="bg-jade-50 text-jade-600 shrink-0">{log.action}</Badge>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-ink truncate">{log.summary}</p>
-                    <p className="text-xs text-subink mt-0.5">
-                      {formatDate(log.date)} {log.time} · {log.actor}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+          ))}
+        </div>
       </div>
     </div>
   );

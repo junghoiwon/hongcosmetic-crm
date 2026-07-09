@@ -1,16 +1,36 @@
-import { useEffect, useState } from "react";
-import { X, Pin, PinOff, Trash2, Plus, Phone, Mail, MessageCircle, Pencil } from "lucide-react";
-import { consultationsDB, quotesDB, samplesDB, logActivity } from "../lib/db";
+import { useEffect, useMemo, useState } from "react";
+import { X, Pin, PinOff, Trash2, Plus, Phone, Mail, MessageCircle, Pencil, TrendingUp } from "lucide-react";
+import { consultationsDB, quotesDB, samplesDB, productsDB, logActivity } from "../lib/db";
 import { CLIENT_STATUS_COLOR, IMPORTANCE_COLOR } from "../lib/constants";
 import { formatDate, todayISO, formatMoney } from "../lib/utils";
 import Badge from "./ui/Badge";
-import { Field, TextArea, TextInput } from "./ui/Field";
+import { Field, TextArea, TextInput, Select } from "./ui/Field";
 import { Button, ConfirmDialog } from "./ui/Basics";
+
+const PERIOD_OPTIONS = [
+  { value: "all", label: "전체 기간" },
+  { value: "3m", label: "최근 3개월" },
+  { value: "6m", label: "최근 6개월" },
+  { value: "year", label: "올해" },
+];
+
+function withinPeriod(dateStr, period) {
+  if (period === "all" || !dateStr) return true;
+  const date = new Date(dateStr);
+  const now = new Date();
+  if (period === "year") return date.getFullYear() === now.getFullYear();
+  const months = period === "3m" ? 3 : 6;
+  const cutoff = new Date(now);
+  cutoff.setMonth(cutoff.getMonth() - months);
+  return date >= cutoff;
+}
 
 export default function ClientDetailDrawer({ client, onClose, onEdit, session, canEdit, canCreate, canDelete }) {
   const [consultations, setConsultations] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [samples, setSamples] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [salesPeriod, setSalesPeriod] = useState("all");
   const [note, setNote] = useState("");
   const [nextContactDate, setNextContactDate] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -29,9 +49,42 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session, c
     loadConsultations();
     quotesDB.list().then((rows) => setQuotes(rows.filter((r) => r.clientId === client.id)));
     samplesDB.list().then((rows) => setSamples(rows.filter((r) => r.clientId === client.id)));
+    productsDB.list().then(setProducts);
     setNote("");
     setNextContactDate("");
   }, [client]);
+
+  const salesSummary = useMemo(() => {
+    const productMap = Object.fromEntries(products.map((p) => [p.id, p]));
+    const approved = quotes.filter((q) => q.status === "승인" && withinPeriod(q.quoteDate, salesPeriod));
+
+    const byProduct = {};
+    for (const q of approved) {
+      const key = `${q.productId}__${q.currency}`;
+      if (!byProduct[key]) {
+        byProduct[key] = {
+          productName: productMap[q.productId]?.name || "삭제된 제품",
+          currency: q.currency,
+          quantity: 0,
+          amount: 0,
+        };
+      }
+      byProduct[key].quantity += q.quantity || 0;
+      byProduct[key].amount += q.totalAmount || 0;
+    }
+
+    const totalsByCurrency = {};
+    for (const row of Object.values(byProduct)) {
+      if (!totalsByCurrency[row.currency]) totalsByCurrency[row.currency] = { quantity: 0, amount: 0 };
+      totalsByCurrency[row.currency].quantity += row.quantity;
+      totalsByCurrency[row.currency].amount += row.amount;
+    }
+
+    return {
+      rows: Object.values(byProduct).sort((a, b) => b.amount - a.amount),
+      totals: Object.entries(totalsByCurrency).map(([currency, v]) => ({ currency, ...v })),
+    };
+  }, [quotes, products, salesPeriod]);
 
   if (!client) return null;
 
@@ -141,6 +194,54 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session, c
               <p className="text-xs text-subink mb-1">샘플 발송</p>
               <p className="font-display text-xl font-semibold text-ink">{samples.length}건</p>
             </div>
+          </section>
+
+          {/* 판매 실적 (승인된 견적 기준) */}
+          <section className="bg-white border border-line rounded-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-display text-sm font-semibold text-ink flex items-center gap-1.5">
+                <TrendingUp size={15} className="text-jade-500" /> 판매 실적
+              </h3>
+              <Select
+                value={salesPeriod}
+                onChange={(e) => setSalesPeriod(e.target.value)}
+                options={PERIOD_OPTIONS}
+                className="!w-auto !text-xs !py-1"
+              />
+            </div>
+            {salesSummary.rows.length === 0 ? (
+              <p className="text-sm text-subink text-center py-4">
+                승인된 견적이 없습니다. (견적 상태가 "승인"인 건만 집계됩니다)
+              </p>
+            ) : (
+              <>
+                <table className="w-full text-sm mb-3">
+                  <thead>
+                    <tr className="text-xs text-subink border-b border-line">
+                      <th className="text-left font-medium py-1.5">제품</th>
+                      <th className="text-right font-medium py-1.5">수량</th>
+                      <th className="text-right font-medium py-1.5">금액</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesSummary.rows.map((row, i) => (
+                      <tr key={i} className="border-b border-line last:border-0">
+                        <td className="py-1.5 text-ink">{row.productName}</td>
+                        <td className="py-1.5 text-right text-ink">{row.quantity.toLocaleString("ko-KR")}개</td>
+                        <td className="py-1.5 text-right text-ink">{formatMoney(row.amount, row.currency)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="flex flex-wrap justify-end gap-2">
+                  {salesSummary.totals.map((t) => (
+                    <Badge key={t.currency} className="bg-jade-50 text-jade-600">
+                      총 {formatMoney(t.amount, t.currency)} · {t.quantity.toLocaleString("ko-KR")}개
+                    </Badge>
+                  ))}
+                </div>
+              </>
+            )}
           </section>
 
           {/* 상담 이력 */}
