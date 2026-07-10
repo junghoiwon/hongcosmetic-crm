@@ -24,6 +24,11 @@ export const BUILTIN_WIDGETS = {
   today_followups: "오늘 해야 할 후속 연락",
   recent_updates: "최근 업데이트",
   client_progress_timeline: "거래처 진행 현황 (타임라인)",
+  kpi_new_inquiries_today: "오늘 신규 문의 (KPI)",
+  kpi_quote_amount_month: "이번달 견적금액 (KPI)",
+  kpi_contract_amount_month: "이번달 계약금액 (KPI)",
+  kpi_shipment_pending: "출고대기 건수 (KPI)",
+  kpi_low_stock: "재고부족 품목 (KPI)",
 };
 
 /** 기본 위젯들의 초기 배치 좌표 (update_v2.sql / add_client_progress_widget.sql 시드값과 동일).
@@ -37,6 +42,11 @@ export const WIDGET_DEFAULT_LAYOUT = {
   today_followups: { x: 590, y: 130, width: 570, height: 320 },
   recent_updates: { x: 0, y: 470, width: 1160, height: 360 },
   client_progress_timeline: { x: 0, y: 850, width: 1160, height: 420 },
+  kpi_new_inquiries_today: { x: 0, y: 1290, width: 220, height: 110 },
+  kpi_quote_amount_month: { x: 230, y: 1290, width: 220, height: 110 },
+  kpi_contract_amount_month: { x: 460, y: 1290, width: 220, height: 110 },
+  kpi_shipment_pending: { x: 690, y: 1290, width: 220, height: 110 },
+  kpi_low_stock: { x: 920, y: 1290, width: 220, height: 110 },
 };
 
 /** 요소 크기를 빠르게 맞출 수 있는 프리셋 (화면 편집기 크기 조절 보조용). */

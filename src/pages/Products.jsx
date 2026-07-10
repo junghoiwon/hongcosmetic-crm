@@ -20,6 +20,7 @@ const EMPTY = {
   boxQty: "",
   hsCode: "",
   currentStock: "",
+  safetyStock: "",
   note: "",
 };
 
@@ -75,6 +76,7 @@ export default function Products({ session, permissionMap }) {
       moq: form.moq === "" ? "" : Number(form.moq),
       boxQty: form.boxQty === "" ? "" : Number(form.boxQty),
       currentStock: form.currentStock === "" ? "" : Number(form.currentStock),
+      safetyStock: form.safetyStock === "" ? "" : Number(form.safetyStock),
     };
     const actor = session?.name || "사용자";
     if (editing) {
@@ -194,6 +196,7 @@ export default function Products({ session, permissionMap }) {
                 <th className="text-right font-medium px-4 py-3">MOQ</th>
                 <th className="text-right font-medium px-4 py-3">박스 입수</th>
                 <th className="text-right font-medium px-4 py-3">현재고</th>
+                <th className="text-right font-medium px-4 py-3">안전재고</th>
                 <th className="text-left font-medium px-4 py-3">HS CODE</th>
                 <th className="px-4 py-3 w-20"></th>
               </tr>
@@ -213,7 +216,16 @@ export default function Products({ session, permissionMap }) {
                   <td className="px-4 py-3 text-right text-ink">{formatMoney(p.price2000)}</td>
                   <td className="px-4 py-3 text-right text-subink">{formatNumber(p.moq)}</td>
                   <td className="px-4 py-3 text-right text-subink">{formatNumber(p.boxQty)}</td>
-                  <td className="px-4 py-3 text-right font-medium text-ink">{formatNumber(p.currentStock)}</td>
+                  <td
+                    className={`px-4 py-3 text-right font-medium ${
+                      p.safetyStock !== "" && p.safetyStock != null && Number(p.currentStock || 0) < Number(p.safetyStock)
+                        ? "text-clay-600"
+                        : "text-ink"
+                    }`}
+                  >
+                    {formatNumber(p.currentStock)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-subink">{formatNumber(p.safetyStock)}</td>
                   <td className="px-4 py-3 text-subink">{p.hsCode || "-"}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
@@ -319,6 +331,12 @@ export default function Products({ session, permissionMap }) {
               <NumberInput
                 value={form.currentStock}
                 onChange={(e) => setForm({ ...form, currentStock: e.target.value })}
+              />
+            </Field>
+            <Field label="안전재고" hint="현재고가 이 값보다 적으면 대시보드에 재고부족으로 표시됩니다.">
+              <NumberInput
+                value={form.safetyStock}
+                onChange={(e) => setForm({ ...form, safetyStock: e.target.value })}
               />
             </Field>
             <Field label="비고" className="col-span-2">

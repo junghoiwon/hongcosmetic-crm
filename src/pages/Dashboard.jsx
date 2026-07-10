@@ -1,11 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
-import { Building2, MessagesSquare, PackageOpen, FileText, Flame, CalendarClock, History, Route, Image as ImageIcon } from "lucide-react";
-import { clientsDB, quotesDB, samplesDB, consultationsDB, activityLogsDB } from "../lib/db";
+import {
+  Building2,
+  MessagesSquare,
+  PackageOpen,
+  FileText,
+  Flame,
+  CalendarClock,
+  History,
+  Route,
+  Image as ImageIcon,
+  UserPlus,
+  Receipt,
+  BadgeCheck,
+  Truck,
+  AlertTriangle,
+} from "lucide-react";
+import { clientsDB, quotesDB, samplesDB, consultationsDB, productsDB, activityLogsDB } from "../lib/db";
 import { fetchLayoutItems } from "../lib/dashboardLayout";
 import { fetchStatusHistoryForClients } from "../lib/clientStatusHistory";
 import { supabase } from "../lib/supabaseClient";
 import { ACTIVE_CLIENT_STATUS, HOT_CLIENT_STATUS, CLIENT_STATUS_COLOR, IMPORTANCE_COLOR } from "../lib/constants";
-import { formatDate, todayISO } from "../lib/utils";
+import { formatDate, formatMoney, todayISO } from "../lib/utils";
 import { StatCard, EmptyState } from "../components/ui/Basics";
 import Badge from "../components/ui/Badge";
 import ClientProgressTimeline from "../components/ClientProgressTimeline";
@@ -59,6 +74,7 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
   const [quotes, setQuotes] = useState([]);
   const [samples, setSamples] = useState([]);
   const [consultations, setConsultations] = useState([]);
+  const [products, setProducts] = useState([]);
   const [recentLogs, setRecentLogs] = useState([]);
   const [layoutItems, setLayoutItems] = useState([]);
   const [historyByClient, setHistoryByClient] = useState({});
@@ -68,6 +84,7 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
     quotesDB.list().then(setQuotes);
     samplesDB.list().then(setSamples);
     consultationsDB.list().then(setConsultations);
+    productsDB.list().then(setProducts);
     activityLogsDB
       .list()
       .then((rows) => setRecentLogs(rows.sort((a, b) => new Date(b.ts) - new Date(a.ts)).slice(0, 10)));
@@ -151,6 +168,56 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
   }, [consultations, samples, today]);
 
   const clientMap = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c])), [clients]);
+
+  // ---- KPI 카드 계산 ----
+  const newInquiriesToday = useMemo(
+    () => clients.filter((c) => (c.createdAt || "").slice(0, 10) === today).length,
+    [clients, today]
+  );
+
+  const isThisMonth = (dateStr) => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  };
+
+  const sumByCurrency = (list) => {
+    const map = {};
+    for (const q of list) {
+      const currency = q.currency || "KRW";
+      map[currency] = (map[currency] || 0) + (q.totalAmount || 0);
+    }
+    return map;
+  };
+
+  const formatMultiCurrency = (map) => {
+    const entries = Object.entries(map).filter(([, amount]) => amount > 0);
+    if (entries.length === 0) return "0원";
+    return entries.map(([currency, amount]) => formatMoney(amount, currency)).join(" · ");
+  };
+
+  const quoteAmountMonth = useMemo(
+    () => sumByCurrency(quotes.filter((q) => isThisMonth(q.quoteDate))),
+    [quotes]
+  );
+  const contractAmountMonth = useMemo(
+    () => sumByCurrency(quotes.filter((q) => q.status === "승인" && isThisMonth(q.quoteDate))),
+    [quotes]
+  );
+
+  const shipmentPendingCount = useMemo(
+    () => clients.filter((c) => c.status === "발주대기").length,
+    [clients]
+  );
+
+  const lowStockCount = useMemo(
+    () =>
+      products.filter(
+        (p) => p.safetyStock !== "" && p.safetyStock != null && Number(p.currentStock || 0) < Number(p.safetyStock)
+      ).length,
+    [products]
+  );
 
   const canvasHeight = useMemo(
     () => Math.max(420, ...layoutItems.map((i) => i.y + i.height), 0) + 20,
@@ -336,6 +403,56 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
               )}
             </div>
           </section>
+        );
+      case "kpi_new_inquiries_today":
+        return (
+          <StatCard
+            label="오늘 신규 문의"
+            value={`${newInquiriesToday}건`}
+            icon={UserPlus}
+            accent="jade"
+            onClick={() => onNavigate("clients")}
+          />
+        );
+      case "kpi_quote_amount_month":
+        return (
+          <StatCard
+            label="이번달 견적금액"
+            value={formatMultiCurrency(quoteAmountMonth)}
+            icon={Receipt}
+            accent="clay"
+            onClick={() => onNavigate("quotes")}
+          />
+        );
+      case "kpi_contract_amount_month":
+        return (
+          <StatCard
+            label="이번달 계약금액"
+            value={formatMultiCurrency(contractAmountMonth)}
+            icon={BadgeCheck}
+            accent="jade"
+            onClick={() => onNavigate("quotes")}
+          />
+        );
+      case "kpi_shipment_pending":
+        return (
+          <StatCard
+            label="출고대기 건수"
+            value={`${shipmentPendingCount}건`}
+            icon={Truck}
+            accent="gold"
+            onClick={() => onNavigate("clients")}
+          />
+        );
+      case "kpi_low_stock":
+        return (
+          <StatCard
+            label="재고부족 품목"
+            value={`${lowStockCount}개`}
+            icon={AlertTriangle}
+            accent="clay"
+            onClick={() => onNavigate("products")}
+          />
         );
       default:
         return null;
