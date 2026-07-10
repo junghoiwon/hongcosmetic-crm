@@ -1,5 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Pencil, Trash2, FlaskConical, Search, FileSpreadsheet, Download, Upload, Image as ImageIcon, Globe } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  FlaskConical,
+  Search,
+  FileSpreadsheet,
+  Download,
+  Upload,
+  Image as ImageIcon,
+  Globe,
+  GripVertical,
+  ChevronUp,
+  ChevronDown,
+  RotateCcw,
+} from "lucide-react";
 import { productsDB, logActivity } from "../lib/db";
 import { canAccess } from "../lib/permissions";
 import { formatMoney, formatNumber } from "../lib/utils";
@@ -8,7 +23,7 @@ import Modal from "../components/ui/Modal";
 import ProductExcelUploadModal from "../components/ProductExcelUploadModal";
 import ProductCountryPriceModal from "../components/ProductCountryPriceModal";
 import { Field, TextInput, NumberInput, TextArea } from "../components/ui/Field";
-import { Button, EmptyState, ConfirmDialog } from "../components/ui/Basics";
+import { Button, EmptyState, ConfirmDialog, Toast } from "../components/ui/Basics";
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -72,19 +87,89 @@ export default function Products({ session, permissionMap }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [excelModalOpen, setExcelModalOpen] = useState(false);
   const [countryPriceTarget, setCountryPriceTarget] = useState(null);
+  const [draggedId, setDraggedId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+  const [resetOrderConfirm, setResetOrderConfirm] = useState(false);
+  const [toastMsg, setToastMsg] = useState("");
   const imageInputRef = useRef(null);
 
   const canCreate = canAccess(session, permissionMap, "products", "create");
   const canEdit = canAccess(session, permissionMap, "products", "edit");
   const canDelete = canAccess(session, permissionMap, "products", "delete");
 
-  const load = () => productsDB.list().then((rows) =>
-    setProducts(rows.sort((a, b) => a.name.localeCompare(b.name, "ko")))
-  );
+  // 정렬 순서(sortOrder)가 없는 제품(신규 등록/과거 데이터)이 있으면, 기존 순서는
+  // 최대한 유지하고 없는 항목만 이름순으로 뒤에 이어붙여 한 번만 채워줍니다.
+  const load = async () => {
+    const rows = await productsDB.list();
+    const hasMissing = rows.some((p) => p.sortOrder === "" || p.sortOrder == null);
+    let ordered;
+    if (hasMissing) {
+      const withOrder = rows
+        .filter((p) => p.sortOrder !== "" && p.sortOrder != null)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+      const withoutOrder = rows
+        .filter((p) => p.sortOrder === "" || p.sortOrder == null)
+        .sort((a, b) => a.name.localeCompare(b.name, "ko"));
+      ordered = [...withOrder, ...withoutOrder];
+      await Promise.all(ordered.map((p, idx) => productsDB.update(p.id, { sortOrder: idx })));
+      ordered = ordered.map((p, idx) => ({ ...p, sortOrder: idx }));
+    } else {
+      ordered = rows.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+    }
+    setProducts(ordered);
+  };
 
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (!toastMsg) return;
+    const t = setTimeout(() => setToastMsg(""), 2500);
+    return () => clearTimeout(t);
+  }, [toastMsg]);
+
+  const persistOrder = async (ordered) => {
+    await Promise.all(ordered.map((p, idx) => productsDB.update(p.id, { sortOrder: idx })));
+  };
+
+  const handleDragStart = (p) => setDraggedId(p.id);
+  const handleDragOver = (e, p) => {
+    e.preventDefault();
+    if (p.id !== draggedId) setDragOverId(p.id);
+  };
+  const handleDrop = async (target) => {
+    setDragOverId(null);
+    if (!draggedId || draggedId === target.id) return;
+    const fromIndex = products.findIndex((p) => p.id === draggedId);
+    const toIndex = products.findIndex((p) => p.id === target.id);
+    if (fromIndex === -1 || toIndex === -1) return;
+    const next = [...products];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setProducts(next);
+    setDraggedId(null);
+    await persistOrder(next);
+  };
+
+  const moveBy = async (p, delta) => {
+    const index = products.findIndex((x) => x.id === p.id);
+    const target = index + delta;
+    if (target < 0 || target >= products.length) return;
+    const next = [...products];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    setProducts(next);
+    await persistOrder(next);
+  };
+
+  const confirmResetOrder = async () => {
+    const ordered = [...products].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+    setProducts(ordered);
+    await persistOrder(ordered);
+    setResetOrderConfirm(false);
+    setToastMsg("이름순으로 정렬을 초기화했습니다.");
+  };
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -194,15 +279,25 @@ export default function Products({ session, permissionMap }) {
         </div>
       </div>
 
-      <div className="relative max-w-sm mb-4">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-subink" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="제품명, HS CODE, 용량으로 검색"
-          className="w-full pl-9 pr-3 py-2 rounded-lg border border-line bg-white text-sm outline-none focus:border-jade-500 focus:ring-2 focus:ring-jade-500/15"
-        />
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div className="relative max-w-sm w-full">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-subink" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="제품명, 코드, 브랜드, 카테고리로 검색"
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-line bg-white text-sm outline-none focus:border-jade-500 focus:ring-2 focus:ring-jade-500/15"
+          />
+        </div>
+        {canEdit && !search.trim() && products.length > 1 && (
+          <Button variant="ghost" size="sm" onClick={() => setResetOrderConfirm(true)}>
+            <RotateCcw size={13} /> 이름순으로 정렬 초기화
+          </Button>
+        )}
       </div>
+      {search.trim() && canEdit && (
+        <p className="text-xs text-subink -mt-2 mb-3">검색 중에는 순서 변경이 비활성화됩니다. 검색어를 지우면 드래그로 순서를 바꿀 수 있습니다.</p>
+      )}
 
       {filteredProducts.length === 0 ? (
         <EmptyState
@@ -225,6 +320,7 @@ export default function Products({ session, permissionMap }) {
           <table className="w-full text-sm min-w-[860px]">
             <thead>
               <tr className="bg-porcelain text-subink text-xs">
+                {canEdit && <th className="px-2 py-3 w-16"></th>}
                 <th className="text-left font-medium px-4 py-3">제품명</th>
                 <th className="text-left font-medium px-4 py-3">제품코드</th>
                 <th className="text-left font-medium px-4 py-3">용량</th>
@@ -241,8 +337,55 @@ export default function Products({ session, permissionMap }) {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((p) => (
-                <tr key={p.id} className="border-t border-line hover:bg-porcelain/60">
+              {filteredProducts.map((p, index) => {
+                const reorderable = canEdit && !search.trim();
+                return (
+                <tr
+                  key={p.id}
+                  draggable={reorderable}
+                  onDragStart={() => reorderable && handleDragStart(p)}
+                  onDragOver={(e) => reorderable && handleDragOver(e, p)}
+                  onDragLeave={() => reorderable && setDragOverId((id) => (id === p.id ? null : id))}
+                  onDrop={() => reorderable && handleDrop(p)}
+                  onDragEnd={() => {
+                    setDraggedId(null);
+                    setDragOverId(null);
+                  }}
+                  className={`border-t border-line hover:bg-porcelain/60 ${draggedId === p.id ? "opacity-40" : ""} ${
+                    dragOverId === p.id ? "border-t-2 border-jade-500" : ""
+                  }`}
+                >
+                  {canEdit && (
+                    <td className="px-2 py-3">
+                      {!search.trim() && (
+                        <div className="flex items-center gap-0.5">
+                          <span className="cursor-grab active:cursor-grabbing text-subink/50 shrink-0" title="드래그해서 순서 변경">
+                            <GripVertical size={14} />
+                          </span>
+                          <div className="flex flex-col">
+                            <button
+                              type="button"
+                              onClick={() => moveBy(p, -1)}
+                              disabled={index === 0}
+                              className="text-subink/60 hover:text-jade-600 disabled:opacity-20"
+                              title="위로 이동"
+                            >
+                              <ChevronUp size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveBy(p, 1)}
+                              disabled={index === filteredProducts.length - 1}
+                              className="text-subink/60 hover:text-jade-600 disabled:opacity-20"
+                              title="아래로 이동"
+                            >
+                              <ChevronDown size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                  )}
                   <td className="px-4 py-3 font-medium text-ink flex items-center gap-2">
                     {p.imageUrl ? (
                       <img src={p.imageUrl} alt="" className="w-7 h-7 rounded-md object-cover shrink-0" />
@@ -298,11 +441,22 @@ export default function Products({ session, permissionMap }) {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
+
+      <ConfirmDialog
+        open={resetOrderConfirm}
+        title="정렬을 이름순으로 초기화할까요?"
+        description="현재 지정된 드래그 순서가 사라지고, 제품명 가나다순으로 다시 정렬됩니다."
+        confirmLabel="초기화"
+        onConfirm={confirmResetOrder}
+        onCancel={() => setResetOrderConfirm(false)}
+      />
+      <Toast message={toastMsg} />
 
       <Modal
         open={modalOpen}
