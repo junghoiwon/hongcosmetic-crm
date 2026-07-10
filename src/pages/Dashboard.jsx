@@ -169,7 +169,7 @@ export default function Dashboard({ onNavigateToClient, onNavigate, session }) {
         sourceId: s.id,
         clientId: s.clientId,
         label: "샘플 후속 연락",
-        detail: `${s.productName} · ${s.quantity}개 발송`,
+        detail: `${s.productSummary || s.productName} · ${s.totalQuantity ?? s.quantity}개 발송`,
       }));
     return [...fromConsultations, ...fromSamples];
   }, [consultations, samples, today]);
