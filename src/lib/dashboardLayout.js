@@ -29,6 +29,8 @@ export const BUILTIN_WIDGETS = {
   kpi_contract_amount_month: "이번달 계약금액 (KPI)",
   kpi_shipment_pending: "출고대기 건수 (KPI)",
   kpi_low_stock: "재고부족 품목 (KPI)",
+  schedule_widget: "일정 (오늘/이번주)",
+  todo_widget: "할 일 (To-do)",
 };
 
 /** 기본 위젯들의 초기 배치 좌표 (update_v2.sql / add_client_progress_widget.sql 시드값과 동일).
@@ -47,6 +49,8 @@ export const WIDGET_DEFAULT_LAYOUT = {
   kpi_contract_amount_month: { x: 460, y: 1290, width: 220, height: 110 },
   kpi_shipment_pending: { x: 690, y: 1290, width: 220, height: 110 },
   kpi_low_stock: { x: 920, y: 1290, width: 220, height: 110 },
+  schedule_widget: { x: 0, y: 1420, width: 570, height: 320 },
+  todo_widget: { x: 590, y: 1420, width: 570, height: 320 },
 };
 
 /** 요소 크기를 빠르게 맞출 수 있는 프리셋 (화면 편집기 크기 조절 보조용). */

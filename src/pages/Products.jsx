@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Pencil, Trash2, FlaskConical, Search, FileSpreadsheet, Download, Upload, Image as ImageIcon } from "lucide-react";
+import { Plus, Pencil, Trash2, FlaskConical, Search, FileSpreadsheet, Download, Upload, Image as ImageIcon, Globe } from "lucide-react";
 import { productsDB, logActivity } from "../lib/db";
 import { canAccess } from "../lib/permissions";
 import { formatMoney, formatNumber } from "../lib/utils";
 import { downloadProductsExcel } from "../lib/productExcel";
 import Modal from "../components/ui/Modal";
 import ProductExcelUploadModal from "../components/ProductExcelUploadModal";
+import ProductCountryPriceModal from "../components/ProductCountryPriceModal";
 import { Field, TextInput, NumberInput, TextArea } from "../components/ui/Field";
 import { Button, EmptyState, ConfirmDialog } from "../components/ui/Basics";
 
@@ -43,6 +44,7 @@ export default function Products({ session, permissionMap }) {
   const [form, setForm] = useState(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [excelModalOpen, setExcelModalOpen] = useState(false);
+  const [countryPriceTarget, setCountryPriceTarget] = useState(null);
   const imageInputRef = useRef(null);
 
   const canCreate = canAccess(session, permissionMap, "products", "create");
@@ -248,6 +250,13 @@ export default function Products({ session, permissionMap }) {
                   <td className="px-4 py-3 text-subink">{p.hsCode || "-"}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
+                      <button
+                        onClick={() => setCountryPriceTarget(p)}
+                        className="p-1.5 rounded-md text-subink hover:bg-white hover:text-jade-600"
+                        title="국가별 가격관리"
+                      >
+                        <Globe size={14} />
+                      </button>
                       {canEdit && (
                         <button
                           onClick={() => openEdit(p)}
@@ -425,6 +434,13 @@ export default function Products({ session, permissionMap }) {
         canCreate={canCreate}
         actor={session?.name}
         onApplied={load}
+      />
+
+      <ProductCountryPriceModal
+        product={countryPriceTarget}
+        open={!!countryPriceTarget}
+        onClose={() => setCountryPriceTarget(null)}
+        canEdit={canEdit}
       />
     </div>
   );

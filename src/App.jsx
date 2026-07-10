@@ -248,7 +248,7 @@ export default function App() {
     }
     switch (page) {
       case "dashboard":
-        return <Dashboard onNavigate={setPage} onNavigateToClient={navigateToClient} />;
+        return <Dashboard onNavigate={setPage} onNavigateToClient={navigateToClient} session={session} />;
       case "clients":
         return (
           <Clients

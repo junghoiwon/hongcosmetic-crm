@@ -24,6 +24,8 @@ import { formatDate, todayISO, sumAmountsByCurrency, formatMultiCurrencyTotal } 
 import { StatCard, EmptyState } from "../components/ui/Basics";
 import Badge from "../components/ui/Badge";
 import ClientProgressTimeline from "../components/ClientProgressTimeline";
+import ScheduleWidget from "../components/ScheduleWidget";
+import TodoWidget from "../components/TodoWidget";
 
 function CustomItemView({ item }) {
   const style = item.style_json || {};
@@ -69,7 +71,7 @@ function CustomItemView({ item }) {
   );
 }
 
-export default function Dashboard({ onNavigateToClient, onNavigate }) {
+export default function Dashboard({ onNavigateToClient, onNavigate, session }) {
   const [clients, setClients] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [samples, setSamples] = useState([]);
@@ -439,6 +441,10 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
             onClick={() => onNavigate("products")}
           />
         );
+      case "schedule_widget":
+        return <ScheduleWidget session={session} />;
+      case "todo_widget":
+        return <TodoWidget />;
       default:
         return null;
     }
