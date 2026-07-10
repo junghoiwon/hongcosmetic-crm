@@ -59,7 +59,7 @@ export function EmptyState({ title, description, action }) {
   );
 }
 
-export function ConfirmDialog({ open, title, description, onConfirm, onCancel }) {
+export function ConfirmDialog({ open, title, description, onConfirm, onCancel, confirmLabel = "삭제" }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
@@ -78,10 +78,20 @@ export function ConfirmDialog({ open, title, description, onConfirm, onCancel })
             onClick={onConfirm}
             className="px-4 py-2 text-sm rounded-lg bg-clay-500 text-white hover:bg-clay-600"
           >
-            삭제
+            {confirmLabel}
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** 작업 완료(삭제/등록/수정 등) 후 잠깐 표시되는 알림. 부모가 message 상태를 setTimeout으로 비워주면 됩니다. */
+export function Toast({ message }) {
+  if (!message) return null;
+  return (
+    <div className="fixed bottom-6 right-6 z-[70] bg-ink text-white text-sm px-4 py-2.5 rounded-lg shadow-card">
+      {message}
     </div>
   );
 }

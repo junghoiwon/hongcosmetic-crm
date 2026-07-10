@@ -14,6 +14,7 @@ import {
   BadgeCheck,
   Truck,
   AlertTriangle,
+  Check,
 } from "lucide-react";
 import { clientsDB, quotesDB, samplesDB, consultationsDB, productsDB, activityLogsDB } from "../lib/db";
 import { fetchLayoutItems } from "../lib/dashboardLayout";
@@ -21,7 +22,7 @@ import { fetchStatusHistoryForClients } from "../lib/clientStatusHistory";
 import { supabase } from "../lib/supabaseClient";
 import { ACTIVE_CLIENT_STATUS, HOT_CLIENT_STATUS, CLIENT_STATUS_COLOR, IMPORTANCE_COLOR } from "../lib/constants";
 import { formatDate, todayISO, sumAmountsByCurrency, formatMultiCurrencyTotal } from "../lib/utils";
-import { StatCard, EmptyState } from "../components/ui/Basics";
+import { StatCard, EmptyState, ConfirmDialog, Toast } from "../components/ui/Basics";
 import Badge from "../components/ui/Badge";
 import ClientProgressTimeline from "../components/ClientProgressTimeline";
 import ScheduleWidget from "../components/ScheduleWidget";
@@ -154,6 +155,8 @@ export default function Dashboard({ onNavigateToClient, onNavigate, session }) {
       .filter((c) => c.nextContactDate === today)
       .map((c) => ({
         id: `cs_${c.id}`,
+        source: "consultation",
+        sourceId: c.id,
         clientId: c.clientId,
         label: "상담 후속 연락",
         detail: c.content,
@@ -162,12 +165,37 @@ export default function Dashboard({ onNavigateToClient, onNavigate, session }) {
       .filter((s) => s.followUpDate === today)
       .map((s) => ({
         id: `sp_${s.id}`,
+        source: "sample",
+        sourceId: s.id,
         clientId: s.clientId,
         label: "샘플 후속 연락",
         detail: `${s.productName} · ${s.quantity}개 발송`,
       }));
     return [...fromConsultations, ...fromSamples];
   }, [consultations, samples, today]);
+
+  // 후속 연락 "완료 처리": 상담/샘플 기록 자체는 남기고, 오늘 목록에서만
+  // 사라지도록 해당 날짜 필드만 비웁니다. (기존 상담 이력·샘플 발송 데이터는 삭제하지 않음)
+  const [followUpTarget, setFollowUpTarget] = useState(null);
+  const [toastMsg, setToastMsg] = useState("");
+
+  useEffect(() => {
+    if (!toastMsg) return;
+    const t = setTimeout(() => setToastMsg(""), 2500);
+    return () => clearTimeout(t);
+  }, [toastMsg]);
+
+  const confirmCompleteFollowUp = async () => {
+    if (!followUpTarget) return;
+    if (followUpTarget.source === "consultation") {
+      await consultationsDB.update(followUpTarget.sourceId, { nextContactDate: "" });
+    } else {
+      await samplesDB.update(followUpTarget.sourceId, { followUpDate: "" });
+    }
+    setFollowUpTarget(null);
+    setToastMsg("후속 연락을 완료 처리했습니다.");
+    loadAll();
+  };
 
   const clientMap = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c])), [clients]);
 
@@ -316,7 +344,19 @@ export default function Dashboard({ onNavigateToClient, onNavigate, session }) {
                           </p>
                           <p className="text-xs text-subink mt-0.5 truncate">{item.detail}</p>
                         </div>
-                        <Badge className="bg-jade-50 text-jade-600 shrink-0">{item.label}</Badge>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Badge className="bg-jade-50 text-jade-600">{item.label}</Badge>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFollowUpTarget(item);
+                            }}
+                            title="완료 처리"
+                            className="p-1.5 rounded-md text-subink hover:bg-jade-50 hover:text-jade-600"
+                          >
+                            <Check size={14} />
+                          </button>
+                        </div>
                       </li>
                     );
                   })}
@@ -472,6 +512,16 @@ export default function Dashboard({ onNavigateToClient, onNavigate, session }) {
           ))}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!followUpTarget}
+        title="후속 연락 완료 처리"
+        description="오늘의 후속 연락 목록에서 제거됩니다. 관련 상담/샘플 기록 자체는 삭제되지 않습니다."
+        confirmLabel="완료 처리"
+        onConfirm={confirmCompleteFollowUp}
+        onCancel={() => setFollowUpTarget(null)}
+      />
+      <Toast message={toastMsg} />
     </div>
   );
 }
