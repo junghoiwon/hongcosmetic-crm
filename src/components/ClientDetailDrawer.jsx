@@ -1,21 +1,45 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, Pin, PinOff, Trash2, Plus, Phone, Mail, MessageCircle, Pencil, TrendingUp } from "lucide-react";
+import { X, Pin, PinOff, Trash2, Plus, Phone, Mail, MessageCircle, Pencil, TrendingUp, Users, Star } from "lucide-react";
 import { consultationsDB, quotesDB, samplesDB, productsDB, logActivity } from "../lib/db";
+import {
+  fetchClientContacts,
+  createClientContact,
+  updateClientContact,
+  deleteClientContact,
+} from "../lib/clientContacts";
 import { CLIENT_STATUS_COLOR, IMPORTANCE_COLOR } from "../lib/constants";
 import { formatDate, todayISO, formatMoney, PERIOD_OPTIONS, isWithinPeriod } from "../lib/utils";
 import Badge from "./ui/Badge";
+import Modal from "./ui/Modal";
 import { Field, TextArea, TextInput, Select } from "./ui/Field";
 import { Button, ConfirmDialog } from "./ui/Basics";
+
+const EMPTY_CONTACT = {
+  name: "",
+  position: "",
+  phone: "",
+  email: "",
+  kakao: "",
+  wechat: "",
+  whatsapp: "",
+  memo: "",
+  is_primary: false,
+};
 
 export default function ClientDetailDrawer({ client, onClose, onEdit, session, canEdit, canCreate, canDelete }) {
   const [consultations, setConsultations] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [samples, setSamples] = useState([]);
   const [products, setProducts] = useState([]);
+  const [contacts, setContacts] = useState([]);
   const [salesPeriod, setSalesPeriod] = useState("all");
   const [note, setNote] = useState("");
   const [nextContactDate, setNextContactDate] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState(null);
+  const [contactForm, setContactForm] = useState(EMPTY_CONTACT);
+  const [contactDeleteTarget, setContactDeleteTarget] = useState(null);
 
   const loadConsultations = () =>
     consultationsDB.list().then((rows) =>
@@ -26,9 +50,12 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session, c
       )
     );
 
+  const loadContacts = () => fetchClientContacts(client.id).then(setContacts);
+
   useEffect(() => {
     if (!client) return;
     loadConsultations();
+    loadContacts();
     quotesDB.list().then((rows) => setQuotes(rows.filter((r) => r.clientId === client.id)));
     samplesDB.list().then((rows) => setSamples(rows.filter((r) => r.clientId === client.id)));
     productsDB.list().then(setProducts);
@@ -102,6 +129,45 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session, c
     loadConsultations();
   };
 
+  const openCreateContact = () => {
+    setEditingContact(null);
+    setContactForm(EMPTY_CONTACT);
+    setContactModalOpen(true);
+  };
+
+  const openEditContact = (contact) => {
+    setEditingContact(contact);
+    setContactForm(contact);
+    setContactModalOpen(true);
+  };
+
+  const saveContact = async (e) => {
+    e.preventDefault();
+    if (editingContact) {
+      await updateClientContact(editingContact.id, contactForm);
+      await logActivity({
+        actor: session?.name || "사용자",
+        action: "거래처 담당자 수정",
+        summary: `${client.companyName} 담당자(${contactForm.name}) 정보 수정`,
+      });
+    } else {
+      await createClientContact(client.id, contactForm);
+      await logActivity({
+        actor: session?.name || "사용자",
+        action: "거래처 담당자 등록",
+        summary: `${client.companyName}에 담당자(${contactForm.name}) 추가`,
+      });
+    }
+    setContactModalOpen(false);
+    loadContacts();
+  };
+
+  const confirmDeleteContact = async () => {
+    await deleteClientContact(contactDeleteTarget.id);
+    setContactDeleteTarget(null);
+    loadContacts();
+  };
+
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="fixed inset-0 bg-ink/30" onClick={onClose} />
@@ -162,6 +228,69 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session, c
             {client.memo && (
               <div className="text-sm text-subink whitespace-pre-wrap pt-2 border-t border-line mt-2">
                 {client.memo}
+              </div>
+            )}
+          </section>
+
+          {/* 담당자 (여러 명) */}
+          <section className="bg-white border border-line rounded-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-display text-sm font-semibold text-ink flex items-center gap-1.5">
+                <Users size={15} className="text-jade-500" /> 담당자
+              </h3>
+              {canCreate && (
+                <Button type="button" variant="ghost" size="sm" onClick={openCreateContact}>
+                  <Plus size={13} /> 담당자 추가
+                </Button>
+              )}
+            </div>
+            {contacts.length === 0 ? (
+              <p className="text-sm text-subink text-center py-3">등록된 담당자가 없습니다.</p>
+            ) : (
+              <div className="space-y-2">
+                {contacts.map((contact) => (
+                  <div key={contact.id} className="border border-line rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          {contact.is_primary && <Star size={12} className="text-gold-500 shrink-0" fill="currentColor" />}
+                          <p className="text-sm font-medium text-ink truncate">{contact.name || "이름 미입력"}</p>
+                          {contact.position && <span className="text-xs text-subink shrink-0">{contact.position}</span>}
+                        </div>
+                        <p className="text-xs text-subink mt-1">
+                          {[
+                            contact.phone,
+                            contact.email,
+                            contact.kakao && `카카오톡 ${contact.kakao}`,
+                            contact.wechat && `위챗 ${contact.wechat}`,
+                            contact.whatsapp && `WhatsApp ${contact.whatsapp}`,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "연락처 미입력"}
+                        </p>
+                        {contact.memo && <p className="text-xs text-subink mt-1 whitespace-pre-wrap">{contact.memo}</p>}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {canEdit && (
+                          <button
+                            onClick={() => openEditContact(contact)}
+                            className="p-1 rounded-md text-subink hover:text-jade-600"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={() => setContactDeleteTarget(contact)}
+                            className="p-1 rounded-md text-subink hover:text-clay-600"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </section>
@@ -306,6 +435,91 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session, c
         description="삭제된 상담 기록은 복구할 수 없습니다."
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <Modal
+        open={contactModalOpen}
+        onClose={() => setContactModalOpen(false)}
+        title={editingContact ? "담당자 정보 수정" : "담당자 추가"}
+        width="max-w-md"
+      >
+        <form onSubmit={saveContact} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="이름" required>
+              <TextInput
+                required
+                value={contactForm.name}
+                onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
+              />
+            </Field>
+            <Field label="직급">
+              <TextInput
+                value={contactForm.position}
+                onChange={(e) => setContactForm({ ...contactForm, position: e.target.value })}
+              />
+            </Field>
+            <Field label="전화">
+              <TextInput
+                value={contactForm.phone}
+                onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
+              />
+            </Field>
+            <Field label="이메일">
+              <TextInput
+                type="email"
+                value={contactForm.email}
+                onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+              />
+            </Field>
+            <Field label="카카오톡 ID">
+              <TextInput
+                value={contactForm.kakao}
+                onChange={(e) => setContactForm({ ...contactForm, kakao: e.target.value })}
+              />
+            </Field>
+            <Field label="위챗 ID">
+              <TextInput
+                value={contactForm.wechat}
+                onChange={(e) => setContactForm({ ...contactForm, wechat: e.target.value })}
+              />
+            </Field>
+            <Field label="WhatsApp" className="col-span-2">
+              <TextInput
+                value={contactForm.whatsapp}
+                onChange={(e) => setContactForm({ ...contactForm, whatsapp: e.target.value })}
+              />
+            </Field>
+            <Field label="메모" className="col-span-2">
+              <TextArea
+                value={contactForm.memo}
+                onChange={(e) => setContactForm({ ...contactForm, memo: e.target.value })}
+              />
+            </Field>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={contactForm.is_primary}
+              onChange={(e) => setContactForm({ ...contactForm, is_primary: e.target.checked })}
+              className="w-4 h-4 accent-jade-600"
+            />
+            대표 담당자로 표시
+          </label>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setContactModalOpen(false)}>
+              취소
+            </Button>
+            <Button type="submit">{editingContact ? "저장" : "등록"}</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        open={!!contactDeleteTarget}
+        title="담당자를 삭제할까요?"
+        description={`"${contactDeleteTarget?.name}" 담당자 정보가 삭제됩니다.`}
+        onConfirm={confirmDeleteContact}
+        onCancel={() => setContactDeleteTarget(null)}
       />
     </div>
   );
