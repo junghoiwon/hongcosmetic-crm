@@ -9,6 +9,7 @@ import Samples from "./pages/Samples";
 import SalesReport from "./pages/SalesReport";
 import Settings from "./pages/Settings";
 import UpdateLog from "./pages/UpdateLog";
+import ActivityLog from "./pages/ActivityLog";
 import Users from "./pages/Users";
 import LayoutEditor from "./pages/LayoutEditor";
 import MenuEditor from "./pages/MenuEditor";
@@ -238,6 +239,9 @@ export default function App() {
     }
     if (page === "menu-editor") {
       return isAdminProfile(session) ? <MenuEditor onMenusChanged={reloadAppMenus} /> : accessDenied;
+    }
+    if (page === "activity-log") {
+      return isAdminProfile(session) ? <ActivityLog /> : accessDenied;
     }
     if (!canView(page)) {
       return accessDenied;

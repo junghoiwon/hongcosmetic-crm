@@ -5,7 +5,7 @@ import { getMenuIcon } from "../lib/icons";
 
 // 이 메뉴들은 menu_permissions로 위임하지 않고 role='admin' 여부로만 접근을 판단합니다.
 // (위임 가능하게 두면 권한 상승 취약점이 생기기 때문 — 3단계에서 정한 원칙)
-const ADMIN_ONLY_KEYS = ["users", "layout", "menu-editor"];
+const ADMIN_ONLY_KEYS = ["users", "layout", "menu-editor", "activity-log"];
 
 export default function Sidebar({
   current,
