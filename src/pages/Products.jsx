@@ -23,18 +23,45 @@ const EMPTY = {
   name: "",
   productCode: "",
   imageUrl: "",
+  englishName: "",
+  brand: "",
+  category: "",
+  division: "",
   capacity: "",
+  unit: "",
   cost: "",
   basePrice: "",
+  consumerPrice: "",
+  wholesalePrice: "",
   price1000: "",
   price2000: "",
   moq: "",
   boxQty: "",
   hsCode: "",
+  barcode: "",
+  manufacturer: "",
+  manufactureCountry: "",
+  storageLocation: "",
+  status: "",
+  isActive: true,
   currentStock: "",
   safetyStock: "",
+  description: "",
   note: "",
 };
+
+const NUMERIC_FIELDS = [
+  "cost",
+  "basePrice",
+  "consumerPrice",
+  "wholesalePrice",
+  "price1000",
+  "price2000",
+  "moq",
+  "boxQty",
+  "currentStock",
+  "safetyStock",
+];
 
 export default function Products({ session, permissionMap }) {
   const [products, setProducts] = useState([]);
@@ -63,7 +90,9 @@ export default function Products({ session, permissionMap }) {
     const q = search.trim().toLowerCase();
     if (!q) return products;
     return products.filter((p) =>
-      [p.name, p.productCode, p.hsCode, p.capacity, p.note].filter(Boolean).some((v) => v.toLowerCase().includes(q))
+      [p.name, p.productCode, p.hsCode, p.capacity, p.note, p.englishName, p.brand, p.category, p.barcode]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
     );
   }, [products, search]);
 
@@ -75,23 +104,16 @@ export default function Products({ session, permissionMap }) {
 
   const openEdit = (p) => {
     setEditing(p);
-    setForm(p);
+    setForm({ ...EMPTY, ...p, isActive: p.isActive === false ? false : true });
     setModalOpen(true);
   };
 
   const save = async (e) => {
     e.preventDefault();
-    const payload = {
-      ...form,
-      cost: form.cost === "" ? "" : Number(form.cost),
-      basePrice: form.basePrice === "" ? "" : Number(form.basePrice),
-      price1000: form.price1000 === "" ? "" : Number(form.price1000),
-      price2000: form.price2000 === "" ? "" : Number(form.price2000),
-      moq: form.moq === "" ? "" : Number(form.moq),
-      boxQty: form.boxQty === "" ? "" : Number(form.boxQty),
-      currentStock: form.currentStock === "" ? "" : Number(form.currentStock),
-      safetyStock: form.safetyStock === "" ? "" : Number(form.safetyStock),
-    };
+    const payload = { ...form };
+    for (const key of NUMERIC_FIELDS) {
+      payload[key] = form[key] === "" ? "" : Number(form[key]);
+    }
     const actor = session?.name || "사용자";
     if (editing) {
       await productsDB.update(editing.id, payload);
@@ -333,6 +355,13 @@ export default function Products({ session, permissionMap }) {
                 )}
               </div>
             </Field>
+            <Field label="영문명">
+              <TextInput
+                value={form.englishName}
+                onChange={(e) => setForm({ ...form, englishName: e.target.value })}
+                placeholder="예: Moisture Calming Cream"
+              />
+            </Field>
             <Field label="제품코드">
               <TextInput
                 value={form.productCode}
@@ -340,11 +369,35 @@ export default function Products({ session, permissionMap }) {
                 placeholder="예: HC-CR-001"
               />
             </Field>
-            <Field label="용량">
+            <Field label="브랜드">
+              <TextInput value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} />
+            </Field>
+            <Field label="카테고리">
+              <TextInput
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                placeholder="예: 스킨케어"
+              />
+            </Field>
+            <Field label="구분">
+              <TextInput
+                value={form.division}
+                onChange={(e) => setForm({ ...form, division: e.target.value })}
+                placeholder="예: 크림"
+              />
+            </Field>
+            <Field label="용량규격">
               <TextInput
                 value={form.capacity}
                 onChange={(e) => setForm({ ...form, capacity: e.target.value })}
                 placeholder="예: 50ml"
+              />
+            </Field>
+            <Field label="단위">
+              <TextInput
+                value={form.unit}
+                onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                placeholder="예: EA"
               />
             </Field>
             <Field label="HS CODE">
@@ -354,16 +407,35 @@ export default function Products({ session, permissionMap }) {
                 placeholder="예: 3304.99"
               />
             </Field>
+            <Field label="바코드">
+              <TextInput value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} />
+            </Field>
+
+            <div className="col-span-2 pt-1 border-t border-line">
+              <p className="text-xs font-medium text-subink pt-3">가격 정보</p>
+            </div>
             <Field label="원가 (₩)">
               <NumberInput
                 value={form.cost}
                 onChange={(e) => setForm({ ...form, cost: e.target.value })}
               />
             </Field>
-            <Field label="기본 공급가 (₩)">
+            <Field label="공급가 (₩)">
               <NumberInput
                 value={form.basePrice}
                 onChange={(e) => setForm({ ...form, basePrice: e.target.value })}
+              />
+            </Field>
+            <Field label="소비자가 (₩)">
+              <NumberInput
+                value={form.consumerPrice}
+                onChange={(e) => setForm({ ...form, consumerPrice: e.target.value })}
+              />
+            </Field>
+            <Field label="도매가 (₩)">
+              <NumberInput
+                value={form.wholesalePrice}
+                onChange={(e) => setForm({ ...form, wholesalePrice: e.target.value })}
               />
             </Field>
             <Field label="1,000개 단가 (₩)">
@@ -378,6 +450,10 @@ export default function Products({ session, permissionMap }) {
                 onChange={(e) => setForm({ ...form, price2000: e.target.value })}
               />
             </Field>
+
+            <div className="col-span-2 pt-1 border-t border-line">
+              <p className="text-xs font-medium text-subink pt-3">재고·물류 정보</p>
+            </div>
             <Field label="MOQ">
               <NumberInput
                 value={form.moq}
@@ -400,6 +476,54 @@ export default function Products({ session, permissionMap }) {
               <NumberInput
                 value={form.safetyStock}
                 onChange={(e) => setForm({ ...form, safetyStock: e.target.value })}
+              />
+            </Field>
+            <Field label="제조사">
+              <TextInput
+                value={form.manufacturer}
+                onChange={(e) => setForm({ ...form, manufacturer: e.target.value })}
+              />
+            </Field>
+            <Field label="제조국">
+              <TextInput
+                value={form.manufactureCountry}
+                onChange={(e) => setForm({ ...form, manufactureCountry: e.target.value })}
+                placeholder="예: 대한민국"
+              />
+            </Field>
+            <Field label="보관위치">
+              <TextInput
+                value={form.storageLocation}
+                onChange={(e) => setForm({ ...form, storageLocation: e.target.value })}
+              />
+            </Field>
+            <Field label="상태">
+              <TextInput
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value })}
+                placeholder="예: 판매중 / 단종 / 일시품절"
+              />
+            </Field>
+            <Field label="사용 여부" className="col-span-2">
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={form.isActive !== false}
+                  onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                  className="w-4 h-4 accent-jade-600"
+                />
+                사용 중인 제품입니다
+              </label>
+            </Field>
+
+            <div className="col-span-2 pt-1 border-t border-line">
+              <p className="text-xs font-medium text-subink pt-3">설명</p>
+            </div>
+            <Field label="설명" className="col-span-2">
+              <TextArea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="제품 상세 설명"
               />
             </Field>
             <Field label="비고" className="col-span-2">
