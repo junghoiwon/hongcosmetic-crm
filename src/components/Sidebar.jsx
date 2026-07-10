@@ -1,4 +1,5 @@
-import { Menu, X, LogOut } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Menu, X, LogOut, ChevronRight } from "lucide-react";
 import { ROLE_LABELS } from "../lib/session";
 import { canAccess, isAdminProfile } from "../lib/permissions";
 import { getMenuIcon } from "../lib/icons";
@@ -6,6 +7,43 @@ import { getMenuIcon } from "../lib/icons";
 // 이 메뉴들은 menu_permissions로 위임하지 않고 role='admin' 여부로만 접근을 판단합니다.
 // (위임 가능하게 두면 권한 상승 취약점이 생기기 때문 — 3단계에서 정한 원칙)
 const ADMIN_ONLY_KEYS = ["users", "layout", "menu-editor", "activity-log"];
+const EXPANDED_STORAGE_KEY = "sidebar_expanded_menus";
+
+function loadExpanded() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(EXPANDED_STORAGE_KEY) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveExpanded(set) {
+  try {
+    localStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify([...set]));
+  } catch {
+    // localStorage 사용 불가 환경이면 그냥 무시합니다 (세션 내에서는 정상 동작).
+  }
+}
+
+function buildTree(menus) {
+  const byParent = {};
+  for (const m of menus) {
+    const key = m.parent_menu_key || "__root__";
+    if (!byParent[key]) byParent[key] = [];
+    byParent[key].push(m);
+  }
+  const attach = (parentKey) =>
+    (byParent[parentKey] || [])
+      .slice()
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((m) => ({ ...m, children: attach(m.menu_key) }));
+  return attach("__root__");
+}
+
+function containsKey(node, key) {
+  if (node.menu_key === key) return true;
+  return (node.children || []).some((c) => containsKey(c, key));
+}
 
 export default function Sidebar({
   current,
@@ -19,11 +57,65 @@ export default function Sidebar({
   onCloseMobile,
 }) {
   const admin = isAdminProfile(session);
+  const [expanded, setExpanded] = useState(loadExpanded);
 
   const canView = (menu) =>
     ADMIN_ONLY_KEYS.includes(menu.menu_key) ? admin : canAccess(session, permissionMap, menu.menu_key, "view");
 
-  const visibleMenus = (appMenus || []).filter((m) => m.is_active && canView(m));
+  // 화면(is_page)이 없고 볼 수 있는 하위 메뉴도 없는 분류는 접근 불가한 빈 그룹이므로 숨깁니다.
+  const visibleMenus = useMemo(() => {
+    const list = (appMenus || []).filter((m) => m.is_active);
+    const byKey = Object.fromEntries(list.map((m) => [m.menu_key, m]));
+    const hasVisibleDescendant = (menuKey, seen = new Set()) => {
+      if (seen.has(menuKey)) return false;
+      seen.add(menuKey);
+      return list.some((m) => {
+        if (m.parent_menu_key !== menuKey) return false;
+        if (m.is_page && canView(m)) return true;
+        return hasVisibleDescendant(m.menu_key, seen);
+      });
+    };
+    return list.filter((m) => {
+      if (m.is_page) return canView(m);
+      return hasVisibleDescendant(m.menu_key);
+    });
+  }, [appMenus, permissionMap, admin]);
+
+  const tree = useMemo(() => buildTree(visibleMenus), [visibleMenus]);
+
+  // 현재 페이지를 포함하는 상위 분류는 자동으로 펼쳐줍니다.
+  useEffect(() => {
+    const ancestors = new Set();
+    const walk = (nodes, path) => {
+      for (const node of nodes) {
+        const nextPath = [...path, node.menu_key];
+        if (node.menu_key === current || (node.children || []).some((c) => containsKey(c, current))) {
+          nextPath.forEach((k) => ancestors.add(k));
+        }
+        walk(node.children || [], nextPath);
+      }
+    };
+    walk(tree, []);
+    if (ancestors.size > 0) {
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        ancestors.forEach((k) => next.add(k));
+        saveExpanded(next);
+        return next;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, tree.length]);
+
+  const toggleExpand = (key) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      saveExpanded(next);
+      return next;
+    });
+  };
 
   const navigate = (key) => {
     onNavigate(key);
@@ -35,6 +127,47 @@ export default function Sidebar({
     backgroundImage: settings?.sidebarBgImageUrl ? `url(${settings.sidebarBgImageUrl})` : undefined,
     backgroundSize: settings?.sidebarBgImageUrl ? "cover" : undefined,
     backgroundPosition: settings?.sidebarBgImageUrl ? "center" : undefined,
+  };
+
+  const renderNode = (menu, depth) => {
+    const Icon = getMenuIcon(menu.icon_key);
+    const active = current === menu.menu_key;
+    const hasChildren = (menu.children || []).length > 0;
+    const isOpen = expanded.has(menu.menu_key);
+    const isActiveBranch = !menu.is_page && containsKey(menu, current);
+
+    const rowStyle =
+      active
+        ? { backgroundColor: "var(--brand-primary-soft)", color: menu.color || "var(--brand-primary)" }
+        : menu.color || settings?.sidebarMenuTextColor
+        ? { color: menu.color || settings.sidebarMenuTextColor }
+        : undefined;
+
+    return (
+      <div key={menu.menu_key}>
+        <button
+          onClick={() => {
+            if (menu.is_page) navigate(menu.menu_key);
+            else toggleExpand(menu.menu_key);
+          }}
+          style={{ paddingLeft: 12 + depth * 16, ...rowStyle }}
+          className={`w-full flex items-center gap-2.5 py-2.5 pr-3 rounded-lg text-sm transition-colors ${
+            active || isActiveBranch ? "font-medium" : "text-subink hover:bg-porcelain hover:text-ink"
+          }`}
+        >
+          <Icon size={depth === 0 ? 17 : 15} strokeWidth={active ? 2.3 : 1.8} className="shrink-0" />
+          <span className="truncate flex-1 text-left">{menu.menu_name}</span>
+          {hasChildren && (
+            <ChevronRight size={13} className={`shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`} />
+          )}
+        </button>
+        {hasChildren && isOpen && (
+          <div className="space-y-0.5 mt-0.5">
+            {menu.children.map((child) => renderNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -79,32 +212,7 @@ export default function Sidebar({
       </div>
 
       <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
-        {visibleMenus.map((menu) => {
-          const Icon = getMenuIcon(menu.icon_key);
-          const active = current === menu.menu_key;
-          return (
-            <button
-              key={menu.menu_key}
-              onClick={() => navigate(menu.menu_key)}
-              style={
-                active
-                  ? {
-                      backgroundColor: "var(--brand-primary-soft)",
-                      color: menu.color || "var(--brand-primary)",
-                    }
-                  : menu.color || settings?.sidebarMenuTextColor
-                  ? { color: menu.color || settings.sidebarMenuTextColor }
-                  : undefined
-              }
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                active ? "font-medium" : "text-subink hover:bg-porcelain hover:text-ink"
-              }`}
-            >
-              <Icon size={17} strokeWidth={active ? 2.3 : 1.8} />
-              {menu.menu_name}
-            </button>
-          );
-        })}
+        {tree.map((node) => renderNode(node, 0))}
       </nav>
 
       <div className="px-3 py-4 border-t border-line">
