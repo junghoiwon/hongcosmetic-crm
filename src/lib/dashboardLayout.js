@@ -8,7 +8,7 @@
 import { supabase } from "./supabaseClient";
 
 const COLUMNS =
-  "id, item_type, content, image_url, x, y, width, height, style_json, sort_order, is_active, name, hidden_at, hidden_by";
+  "id, item_type, content, image_url, x, y, width, height, style_json, sort_order, is_active, name, hidden_at, hidden_by, locked";
 
 /**
  * 기존 대시보드 화면(통계 카드, 발주가능성 거래처, 오늘 후속연락, 최근 업데이트)을
