@@ -53,7 +53,14 @@ export default function ClientProgressTimeline({ client, historyRows, onClick })
                 <div
                   className={`absolute top-[7px] h-0.5 ${i <= currentIndex ? "bg-jade-500" : "bg-line"}`}
                   style={{ right: "50%", width: "100%" }}
-                />
+                >
+                  {i === currentIndex && !isException && (
+                    <span
+                      className="absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-jade-600 shadow-[0_0_5px_rgba(47,111,98,0.7)]"
+                      style={{ animation: "travel 1.8s ease-in-out infinite" }}
+                    />
+                  )}
+                </div>
               )}
               <span className="relative flex items-center justify-center w-4 h-4 z-10">
                 {isCurrent && (

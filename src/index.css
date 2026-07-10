@@ -26,6 +26,14 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* 거래처 진행 타임라인: 현재 단계로 "이동 중"인 느낌을 주는 트래블링 마커 */
+@keyframes travel {
+  0% { left: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+
 /* scrollbar */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
