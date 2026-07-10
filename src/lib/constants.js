@@ -70,6 +70,45 @@ export const QUOTE_STATUS_COLOR = {
 
 export const CARRIERS = ["EMS", "DHL", "FedEx", "기타"];
 
+export const CONSULTATION_CATEGORY = ["상담", "미팅", "전화", "이메일", "기타"];
+
+export const CONSULTATION_CONTACT_METHOD = [
+  "대면",
+  "전화",
+  "메신저",
+  "카카오톡",
+  "위챗",
+  "왓츠앱",
+  "이메일",
+  "화상통화",
+  "전시회",
+  "기타",
+];
+
+export const CONSULTATION_STATUS = [
+  "후속조치없음",
+  "연락예정",
+  "자료발송예정",
+  "견적예정",
+  "샘플발송예정",
+  "회신대기",
+  "협상중",
+  "완료",
+  "보류",
+];
+
+export const CONSULTATION_STATUS_COLOR = {
+  후속조치없음: "bg-line text-subink",
+  연락예정: "bg-jade-50 text-jade-600",
+  자료발송예정: "bg-jade-50 text-jade-600",
+  견적예정: "bg-clay-100 text-clay-600",
+  샘플발송예정: "bg-gold-400/15 text-gold-500",
+  회신대기: "bg-gold-400/15 text-gold-500",
+  협상중: "bg-clay-100 text-clay-600",
+  완료: "bg-jade-600 text-white",
+  보류: "bg-ink/5 text-ink/40",
+};
+
 export const COUNTRIES = [
   "한국",
   "일본",

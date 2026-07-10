@@ -22,6 +22,16 @@ export async function fetchClientContacts(clientId) {
   return data || [];
 }
 
+/** 상담일지 등에서 거래처별 담당자를 빠르게 찾기 위해 전체를 한 번에 가져옵니다. */
+export async function fetchAllClientContacts() {
+  const { data, error } = await supabase.from("client_contacts").select(COLUMNS).order("created_at", { ascending: true });
+  if (error) {
+    console.error("[clientContacts] 전체 담당자 조회 실패", error);
+    return [];
+  }
+  return data || [];
+}
+
 export async function createClientContact(clientId, patch) {
   const { data, error } = await supabase
     .from("client_contacts")

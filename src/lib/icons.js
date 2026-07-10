@@ -24,6 +24,8 @@ import {
   BarChart3,
   Warehouse,
   Circle,
+  MessagesSquare,
+  CalendarDays,
 } from "lucide-react";
 
 export const ICON_MAP = {
@@ -44,6 +46,8 @@ export const ICON_MAP = {
   BarChart3,
   Warehouse,
   Circle,
+  MessagesSquare,
+  CalendarDays,
 };
 
 export const ICON_OPTIONS = Object.keys(ICON_MAP);
