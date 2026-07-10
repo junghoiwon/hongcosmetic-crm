@@ -42,6 +42,11 @@ export default function MenuEditor({ onMenusChanged }) {
     notifyChanged();
   };
 
+  const setColor = async (menu, color) => {
+    await updateAppMenu(menu.id, { color });
+    notifyChanged();
+  };
+
   const handleDragStart = (menu) => setDraggedId(menu.id);
 
   const handleDragOver = (e, menu) => {
@@ -134,6 +139,24 @@ export default function MenuEditor({ onMenusChanged }) {
                   className="max-w-xs"
                 />
                 <p className="text-[11px] text-subink mt-1">{menu.menu_key}</p>
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0" title="메뉴 색상">
+                <input
+                  type="color"
+                  value={menu.color || "#6B665F"}
+                  onChange={(e) => setColor(menu, e.target.value)}
+                  className="w-7 h-7 rounded-md border border-line cursor-pointer"
+                />
+                {menu.color && (
+                  <button
+                    onClick={() => setColor(menu, null)}
+                    className="text-[11px] text-subink hover:text-clay-600"
+                    title="기본 색상으로"
+                  >
+                    초기화
+                  </button>
+                )}
               </div>
 
               {menu.is_protected ? (

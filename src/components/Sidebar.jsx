@@ -88,9 +88,12 @@ export default function Sidebar({
               onClick={() => navigate(menu.menu_key)}
               style={
                 active
-                  ? { backgroundColor: "var(--brand-primary-soft)", color: "var(--brand-primary)" }
-                  : settings?.sidebarMenuTextColor
-                  ? { color: settings.sidebarMenuTextColor }
+                  ? {
+                      backgroundColor: "var(--brand-primary-soft)",
+                      color: menu.color || "var(--brand-primary)",
+                    }
+                  : menu.color || settings?.sidebarMenuTextColor
+                  ? { color: menu.color || settings.sidebarMenuTextColor }
                   : undefined
               }
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${

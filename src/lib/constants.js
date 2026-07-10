@@ -35,6 +35,17 @@ export const CLIENT_STATUS_COLOR = {
   실패: "bg-ink/5 text-ink/40",
 };
 
+export const CLIENT_GRADES = ["VIP", "A", "B", "C", "잠재", "휴면"];
+
+export const CLIENT_GRADE_COLOR = {
+  VIP: "bg-gold-400 text-white",
+  A: "bg-jade-600 text-white",
+  B: "bg-jade-100 text-jade-700",
+  C: "bg-line text-subink",
+  잠재: "bg-clay-50 text-clay-600",
+  휴면: "bg-ink/5 text-ink/40",
+};
+
 export const IMPORTANCE = ["상", "중", "하"];
 
 export const IMPORTANCE_COLOR = {

@@ -58,6 +58,27 @@ export async function downloadProductExcelTemplate() {
   await writeXlsxFile(TEMPLATE_SAMPLE_ROWS, { columns: TEMPLATE_COLUMNS }).toFile("제품재고_업로드양식.xlsx");
 }
 
+const EXPORT_COLUMNS = [
+  { header: "제품명", cell: (p) => p.name, width: 22 },
+  { header: "제품코드", cell: (p) => p.productCode || "", width: 16 },
+  { header: "용량", cell: (p) => p.capacity || "", width: 12 },
+  { header: "원가", cell: (p) => p.cost ?? "", width: 10 },
+  { header: "기본 공급가", cell: (p) => p.basePrice ?? "", width: 12 },
+  { header: "1000개 단가", cell: (p) => p.price1000 ?? "", width: 12 },
+  { header: "2000개 단가", cell: (p) => p.price2000 ?? "", width: 12 },
+  { header: "MOQ", cell: (p) => p.moq ?? "", width: 10 },
+  { header: "박스입수", cell: (p) => p.boxQty ?? "", width: 10 },
+  { header: "현재고", cell: (p) => p.currentStock ?? "", width: 10 },
+  { header: "안전재고", cell: (p) => p.safetyStock ?? "", width: 10 },
+  { header: "HS CODE", cell: (p) => p.hsCode || "", width: 12 },
+  { header: "비고", cell: (p) => p.note || "", width: 30 },
+];
+
+/** 현재 제품 목록을 엑셀 파일로 다운로드합니다. */
+export async function downloadProductsExcel(products) {
+  await writeXlsxFile(products, { columns: EXPORT_COLUMNS }).toFile("제품목록.xlsx");
+}
+
 /** 파싱 오류 객체를 사람이 읽기 쉬운 한글 문구로 바꿉니다. */
 export function describeParseError(e) {
   if (e.error === "required") return "값이 비어 있습니다.";

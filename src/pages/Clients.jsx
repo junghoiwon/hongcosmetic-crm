@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Trash2, Building2 } from "lucide-react";
-import { clientsDB, customCountriesDB, saveCustomCountryIfNew, logActivity } from "../lib/db";
+import { clientsDB, customCountriesDB, saveCustomCountryIfNew, quotesDB, logActivity } from "../lib/db";
 import { recordClientStatusChange } from "../lib/clientStatusHistory";
 import { canAccess } from "../lib/permissions";
-import { CLIENT_STATUS, CLIENT_STATUS_COLOR, IMPORTANCE, IMPORTANCE_COLOR, COUNTRIES } from "../lib/constants";
+import {
+  CLIENT_STATUS,
+  CLIENT_STATUS_COLOR,
+  IMPORTANCE,
+  IMPORTANCE_COLOR,
+  CLIENT_GRADES,
+  CLIENT_GRADE_COLOR,
+  COUNTRIES,
+} from "../lib/constants";
+import { formatMultiCurrencyTotal, sumAmountsByCurrency } from "../lib/utils";
 import Modal from "../components/ui/Modal";
 import Badge from "../components/ui/Badge";
 import { Field, TextInput, Select, TextArea } from "../components/ui/Field";
@@ -23,13 +32,16 @@ const EMPTY = {
   interestProduct: "",
   status: "신규문의",
   importance: "중",
+  grade: "잠재",
   memo: "",
 };
 
 export default function Clients({ openClientId, clearOpenClientId, session, permissionMap }) {
   const [clients, setClients] = useState([]);
+  const [quotes, setQuotes] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -40,14 +52,31 @@ export default function Clients({ openClientId, clearOpenClientId, session, perm
   const canEdit = canAccess(session, permissionMap, "clients", "edit");
   const canDelete = canAccess(session, permissionMap, "clients", "delete");
 
-  const load = () =>
+  const load = () => {
     clientsDB.list().then((rows) =>
       setClients(rows.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)))
     );
+    quotesDB.list().then(setQuotes);
+  };
 
   useEffect(() => {
     load();
   }, []);
+
+  // 거래처별 승인된 견적 총액(통화별). 목록에 "총 판매금액" 컬럼으로 표시합니다.
+  const salesByClient = useMemo(() => {
+    const approved = quotes.filter((q) => q.status === "승인");
+    const map = {};
+    for (const q of approved) {
+      if (!map[q.clientId]) map[q.clientId] = [];
+      map[q.clientId].push(q);
+    }
+    const totals = {};
+    for (const [clientId, rows] of Object.entries(map)) {
+      totals[clientId] = sumAmountsByCurrency(rows);
+    }
+    return totals;
+  }, [quotes]);
 
   useEffect(() => {
     if (openClientId && clients.length) {
@@ -60,15 +89,16 @@ export default function Clients({ openClientId, clearOpenClientId, session, perm
   const filtered = useMemo(() => {
     return clients.filter((c) => {
       const matchesStatus = !statusFilter || c.status === statusFilter;
+      const matchesGrade = !gradeFilter || c.grade === gradeFilter;
       const q = search.trim().toLowerCase();
       const matchesSearch =
         !q ||
         [c.companyName, c.contactName, c.country, c.interestProduct, c.email]
           .filter(Boolean)
           .some((v) => v.toLowerCase().includes(q));
-      return matchesStatus && matchesSearch;
+      return matchesStatus && matchesGrade && matchesSearch;
     });
-  }, [clients, search, statusFilter]);
+  }, [clients, search, statusFilter, gradeFilter]);
 
   const openCreate = () => {
     setEditing(null);
@@ -156,6 +186,13 @@ export default function Clients({ openClientId, clearOpenClientId, session, perm
             className="w-full pl-9 pr-3 py-2 rounded-lg border border-line bg-white text-sm outline-none focus:border-jade-500 focus:ring-2 focus:ring-jade-500/15"
           />
         </div>
+        <Select
+          value={gradeFilter}
+          onChange={(e) => setGradeFilter(e.target.value)}
+          placeholder="등급 전체"
+          options={CLIENT_GRADES}
+          className="!w-auto"
+        />
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => setStatusFilter("")}
@@ -206,6 +243,8 @@ export default function Clients({ openClientId, clearOpenClientId, session, perm
                 <th className="text-left font-medium px-4 py-3">관심 제품</th>
                 <th className="text-left font-medium px-4 py-3">거래 상태</th>
                 <th className="text-left font-medium px-4 py-3">중요도</th>
+                <th className="text-left font-medium px-4 py-3">등급</th>
+                <th className="text-right font-medium px-4 py-3">총 판매금액</th>
                 <th className="px-4 py-3 w-14"></th>
               </tr>
             </thead>
@@ -230,6 +269,12 @@ export default function Clients({ openClientId, clearOpenClientId, session, perm
                   </td>
                   <td className="px-4 py-3">
                     <Badge className={IMPORTANCE_COLOR[c.importance]}>{c.importance}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    {c.grade && <Badge className={CLIENT_GRADE_COLOR[c.grade]}>{c.grade}</Badge>}
+                  </td>
+                  <td className="px-4 py-3 text-right text-ink whitespace-nowrap">
+                    {salesByClient[c.id] ? formatMultiCurrencyTotal(salesByClient[c.id]) : "-"}
                   </td>
                   <td className="px-4 py-3">
                     {canDelete && (
@@ -329,6 +374,13 @@ export default function Clients({ openClientId, clearOpenClientId, session, perm
                 options={IMPORTANCE}
                 value={form.importance}
                 onChange={(e) => setForm({ ...form, importance: e.target.value })}
+              />
+            </Field>
+            <Field label="거래처 등급">
+              <Select
+                options={CLIENT_GRADES}
+                value={form.grade}
+                onChange={(e) => setForm({ ...form, grade: e.target.value })}
               />
             </Field>
             <Field label="메모" className="col-span-2">

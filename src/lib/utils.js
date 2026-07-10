@@ -56,6 +56,23 @@ export function isWithinPeriod(dateStr, period) {
   return date >= cutoff;
 }
 
+/** 금액 배열을 통화별로 합산합니다. amountKey/currencyKey로 필드명을 지정할 수 있습니다. */
+export function sumAmountsByCurrency(rows, amountKey = "totalAmount", currencyKey = "currency") {
+  const map = {};
+  for (const row of rows) {
+    const currency = row[currencyKey] || "KRW";
+    map[currency] = (map[currency] || 0) + (row[amountKey] || 0);
+  }
+  return map;
+}
+
+/** { KRW: 1000, USD: 50 } 형태를 "₩1,000 · $50" 같은 문자열로 만듭니다. */
+export function formatMultiCurrencyTotal(amountsByCurrency) {
+  const entries = Object.entries(amountsByCurrency).filter(([, amount]) => amount > 0);
+  if (entries.length === 0) return "0원";
+  return entries.map(([currency, amount]) => formatMoney(amount, currency)).join(" · ");
+}
+
 /** #RRGGBB 형태의 hex 색상을 rgba(...) 문자열로 변환합니다. 브랜드 컬러의 옅은 배경톤을 만들 때 사용합니다. */
 export function withAlpha(hex, alpha = 0.12) {
   if (!hex) return `rgba(47,111,98,${alpha})`;

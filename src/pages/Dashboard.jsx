@@ -20,7 +20,7 @@ import { fetchLayoutItems } from "../lib/dashboardLayout";
 import { fetchStatusHistoryForClients } from "../lib/clientStatusHistory";
 import { supabase } from "../lib/supabaseClient";
 import { ACTIVE_CLIENT_STATUS, HOT_CLIENT_STATUS, CLIENT_STATUS_COLOR, IMPORTANCE_COLOR } from "../lib/constants";
-import { formatDate, formatMoney, todayISO } from "../lib/utils";
+import { formatDate, todayISO, sumAmountsByCurrency, formatMultiCurrencyTotal } from "../lib/utils";
 import { StatCard, EmptyState } from "../components/ui/Basics";
 import Badge from "../components/ui/Badge";
 import ClientProgressTimeline from "../components/ClientProgressTimeline";
@@ -182,27 +182,12 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   };
 
-  const sumByCurrency = (list) => {
-    const map = {};
-    for (const q of list) {
-      const currency = q.currency || "KRW";
-      map[currency] = (map[currency] || 0) + (q.totalAmount || 0);
-    }
-    return map;
-  };
-
-  const formatMultiCurrency = (map) => {
-    const entries = Object.entries(map).filter(([, amount]) => amount > 0);
-    if (entries.length === 0) return "0원";
-    return entries.map(([currency, amount]) => formatMoney(amount, currency)).join(" · ");
-  };
-
   const quoteAmountMonth = useMemo(
-    () => sumByCurrency(quotes.filter((q) => isThisMonth(q.quoteDate))),
+    () => sumAmountsByCurrency(quotes.filter((q) => isThisMonth(q.quoteDate))),
     [quotes]
   );
   const contractAmountMonth = useMemo(
-    () => sumByCurrency(quotes.filter((q) => q.status === "승인" && isThisMonth(q.quoteDate))),
+    () => sumAmountsByCurrency(quotes.filter((q) => q.status === "승인" && isThisMonth(q.quoteDate))),
     [quotes]
   );
 
@@ -418,7 +403,7 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
         return (
           <StatCard
             label="이번달 견적금액"
-            value={formatMultiCurrency(quoteAmountMonth)}
+            value={formatMultiCurrencyTotal(quoteAmountMonth)}
             icon={Receipt}
             accent="clay"
             onClick={() => onNavigate("quotes")}
@@ -428,7 +413,7 @@ export default function Dashboard({ onNavigateToClient, onNavigate }) {
         return (
           <StatCard
             label="이번달 계약금액"
-            value={formatMultiCurrency(contractAmountMonth)}
+            value={formatMultiCurrencyTotal(contractAmountMonth)}
             icon={BadgeCheck}
             accent="jade"
             onClick={() => onNavigate("quotes")}

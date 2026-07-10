@@ -8,7 +8,7 @@
  */
 import { supabase } from "./supabaseClient";
 
-const COLUMNS = "id, menu_key, menu_name, icon_key, sort_order, is_active, is_protected, parent_menu_key";
+const COLUMNS = "id, menu_key, menu_name, icon_key, color, sort_order, is_active, is_protected, parent_menu_key";
 
 /** 숨김 메뉴를 포함한 전체 메뉴 목록을 가져옵니다. */
 export async function fetchAllAppMenus() {

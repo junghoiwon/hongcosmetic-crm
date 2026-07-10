@@ -1,16 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, FlaskConical, Search, FileSpreadsheet } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Pencil, Trash2, FlaskConical, Search, FileSpreadsheet, Download, Upload, Image as ImageIcon } from "lucide-react";
 import { productsDB, logActivity } from "../lib/db";
 import { canAccess } from "../lib/permissions";
 import { formatMoney, formatNumber } from "../lib/utils";
+import { downloadProductsExcel } from "../lib/productExcel";
 import Modal from "../components/ui/Modal";
 import ProductExcelUploadModal from "../components/ProductExcelUploadModal";
 import { Field, TextInput, NumberInput, TextArea } from "../components/ui/Field";
 import { Button, EmptyState, ConfirmDialog } from "../components/ui/Basics";
 
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 const EMPTY = {
   name: "",
   productCode: "",
+  imageUrl: "",
   capacity: "",
   cost: "",
   basePrice: "",
@@ -32,6 +43,7 @@ export default function Products({ session, permissionMap }) {
   const [form, setForm] = useState(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [excelModalOpen, setExcelModalOpen] = useState(false);
+  const imageInputRef = useRef(null);
 
   const canCreate = canAccess(session, permissionMap, "products", "create");
   const canEdit = canAccess(session, permissionMap, "products", "edit");
@@ -142,6 +154,9 @@ export default function Products({ session, permissionMap }) {
           <p className="text-sm text-subink mt-1">공급 제품과 수량별 단가를 관리합니다.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="ghost" onClick={() => downloadProductsExcel(filteredProducts)}>
+            <Download size={15} /> 엑셀 다운로드
+          </Button>
           {canEdit && (
             <Button variant="ghost" onClick={() => setExcelModalOpen(true)}>
               <FileSpreadsheet size={15} /> 엑셀 업로드
@@ -205,7 +220,11 @@ export default function Products({ session, permissionMap }) {
               {filteredProducts.map((p) => (
                 <tr key={p.id} className="border-t border-line hover:bg-porcelain/60">
                   <td className="px-4 py-3 font-medium text-ink flex items-center gap-2">
-                    <FlaskConical size={14} className="text-jade-500 shrink-0" />
+                    {p.imageUrl ? (
+                      <img src={p.imageUrl} alt="" className="w-7 h-7 rounded-md object-cover shrink-0" />
+                    ) : (
+                      <FlaskConical size={14} className="text-jade-500 shrink-0" />
+                    )}
                     {p.name}
                   </td>
                   <td className="px-4 py-3 text-subink">{p.productCode || "-"}</td>
@@ -269,6 +288,41 @@ export default function Products({ session, permissionMap }) {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="예: 수분 진정 크림"
               />
+            </Field>
+            <Field label="제품 이미지" className="col-span-2">
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 rounded-lg border border-line bg-porcelain flex items-center justify-center overflow-hidden shrink-0">
+                  {form.imageUrl ? (
+                    <img src={form.imageUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon size={18} className="text-subink" />
+                  )}
+                </div>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const dataUrl = await readFileAsDataUrl(file);
+                    setForm((f) => ({ ...f, imageUrl: dataUrl }));
+                  }}
+                />
+                <Button type="button" variant="ghost" size="sm" onClick={() => imageInputRef.current?.click()}>
+                  <Upload size={13} /> 업로드
+                </Button>
+                {form.imageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, imageUrl: "" }))}
+                    className="text-xs text-subink hover:text-clay-600"
+                  >
+                    제거
+                  </button>
+                )}
+              </div>
             </Field>
             <Field label="제품코드">
               <TextInput
