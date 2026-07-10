@@ -70,6 +70,21 @@ export const QUOTE_STATUS_COLOR = {
 
 export const CARRIERS = ["EMS", "DHL", "FedEx", "기타"];
 
+export const CALENDAR_EVENT_TYPES = [
+  "상담",
+  "미팅",
+  "전화",
+  "견적",
+  "샘플발송",
+  "후속연락",
+  "생산",
+  "출고",
+  "입금",
+  "전시회",
+  "출장",
+  "기타",
+];
+
 export const CONSULTATION_CATEGORY = ["상담", "미팅", "전화", "이메일", "기타"];
 
 export const CONSULTATION_CONTACT_METHOD = [

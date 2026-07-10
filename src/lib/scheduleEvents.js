@@ -29,6 +29,15 @@ export async function createScheduleEvent(patch) {
   return data;
 }
 
+export async function updateScheduleEvent(id, patch) {
+  const { data, error } = await supabase.from("schedule_events").update(patch).eq("id", id).select(COLUMNS).single();
+  if (error) {
+    console.error("[scheduleEvents] 수정 실패", error);
+    throw error;
+  }
+  return data;
+}
+
 export async function deleteScheduleEvent(id) {
   const { error } = await supabase.from("schedule_events").delete().eq("id", id);
   if (error) {
