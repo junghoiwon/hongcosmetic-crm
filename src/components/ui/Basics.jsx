@@ -31,11 +31,11 @@ export function StatCard({ label, value, icon: Icon, accent = "jade", onClick, s
   return (
     <button
       onClick={onClick}
-      className={`w-full h-full flex flex-col justify-between text-left bg-white border border-line rounded-card p-5 shadow-card transition-transform overflow-hidden ${
+      className={`w-full h-full flex flex-col justify-center gap-3 text-left bg-white border border-line rounded-card p-5 shadow-card transition-transform overflow-hidden ${
         onClick ? "hover:-translate-y-0.5 cursor-pointer" : "cursor-default"
       }`}
     >
-      <div className="flex items-center justify-between gap-2 mb-3">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-sm text-subink truncate">{label}</span>
         {Icon && (
           <span className={`p-2 rounded-lg shrink-0 ${accents[accent]}`}>
