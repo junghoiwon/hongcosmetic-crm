@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { X, Pin, PinOff, Trash2, Plus, Phone, Mail, MessageCircle, Pencil, TrendingUp, Users, Star } from "lucide-react";
 import { consultationsDB, quotesDB, samplesDB, productsDB, logActivity } from "../lib/db";
+import { fetchAllQuotationItems } from "../lib/quotationItems";
 import {
   fetchClientContacts,
   createClientContact,
@@ -40,6 +41,7 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session, c
   const [editingContact, setEditingContact] = useState(null);
   const [contactForm, setContactForm] = useState(EMPTY_CONTACT);
   const [contactDeleteTarget, setContactDeleteTarget] = useState(null);
+  const [itemsByQuotation, setItemsByQuotation] = useState({});
 
   const loadConsultations = () =>
     consultationsDB.list().then((rows) =>
@@ -59,6 +61,7 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session, c
     quotesDB.list().then((rows) => setQuotes(rows.filter((r) => r.clientId === client.id)));
     samplesDB.list().then((rows) => setSamples(rows.filter((r) => r.clientId === client.id)));
     productsDB.list().then(setProducts);
+    fetchAllQuotationItems().then(setItemsByQuotation);
     setNote("");
     setNextContactDate("");
   }, [client]);
@@ -69,17 +72,32 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session, c
 
     const byProduct = {};
     for (const q of approved) {
-      const key = `${q.productId}__${q.currency}`;
-      if (!byProduct[key]) {
-        byProduct[key] = {
-          productName: productMap[q.productId]?.name || "삭제된 제품",
-          currency: q.currency,
-          quantity: 0,
-          amount: 0,
-        };
+      const realItems = itemsByQuotation[q.id];
+      const lineItems =
+        realItems && realItems.length > 0
+          ? realItems
+          : q.productId
+          ? [
+              {
+                productId: q.productId,
+                quantity: q.quantity || 0,
+                supplyAmount: (q.quantity || 0) * (q.unitPrice || 0),
+              },
+            ]
+          : [];
+      for (const it of lineItems) {
+        const key = `${it.productId}__${q.currency}`;
+        if (!byProduct[key]) {
+          byProduct[key] = {
+            productName: it.productName || productMap[it.productId]?.name || "삭제된 제품",
+            currency: q.currency,
+            quantity: 0,
+            amount: 0,
+          };
+        }
+        byProduct[key].quantity += it.quantity || 0;
+        byProduct[key].amount += it.supplyAmount || 0;
       }
-      byProduct[key].quantity += q.quantity || 0;
-      byProduct[key].amount += q.totalAmount || 0;
     }
 
     const totalsByCurrency = {};
@@ -93,7 +111,7 @@ export default function ClientDetailDrawer({ client, onClose, onEdit, session, c
       rows: Object.values(byProduct).sort((a, b) => b.amount - a.amount),
       totals: Object.entries(totalsByCurrency).map(([currency, v]) => ({ currency, ...v })),
     };
-  }, [quotes, products, salesPeriod]);
+  }, [quotes, products, salesPeriod, itemsByQuotation]);
 
   if (!client) return null;
 
