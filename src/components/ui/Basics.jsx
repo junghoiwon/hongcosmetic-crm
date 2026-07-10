@@ -51,6 +51,48 @@ export function StatCard({ label, value, icon: Icon, accent = "jade", onClick, s
   );
 }
 
+/**
+ * Card / CardHeader / CardBody
+ * ------------------------------------------------------------------
+ * 대시보드의 모든 카드(일정/할일/후속연락/업데이트/거래처 진행현황/
+ * KPI/통계)가 공통으로 쓰는 뼈대. border-radius/padding/shadow/헤더
+ * 구조를 하나로 통일해서 어떤 카드든 같은 느낌을 갖도록 합니다.
+ * ------------------------------------------------------------------
+ */
+export function Card({ className = "", onClick, children }) {
+  const Tag = onClick ? "button" : "section";
+  return (
+    <Tag
+      onClick={onClick}
+      className={`w-full h-full flex flex-col text-left bg-white border border-line rounded-card shadow-card overflow-hidden ${
+        onClick ? "hover:-translate-y-0.5 transition-transform cursor-pointer" : ""
+      } ${className}`}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+export function CardHeader({ icon: Icon, title, action, dense = false }) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-2 border-b border-line shrink-0 ${
+        dense ? "px-4 py-2.5" : "px-5 py-4"
+      }`}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        {Icon && <Icon size={dense ? 14 : 16} className="text-jade-500 shrink-0" />}
+        <h2 className={`font-display font-semibold text-ink truncate ${dense ? "text-xs" : "text-sm"}`}>{title}</h2>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+export function CardBody({ className = "", scroll = true, children }) {
+  return <div className={`flex-1 min-h-0 ${scroll ? "overflow-y-auto" : "overflow-hidden"} ${className}`}>{children}</div>;
+}
+
 export function EmptyState({ title, description, action }) {
   return (
     <div className="flex flex-col items-center justify-center text-center py-16 px-6 border border-dashed border-line rounded-card bg-white/60">

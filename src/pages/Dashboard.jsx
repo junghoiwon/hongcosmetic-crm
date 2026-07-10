@@ -21,12 +21,24 @@ import { fetchLayoutItems } from "../lib/dashboardLayout";
 import { fetchStatusHistoryForClients } from "../lib/clientStatusHistory";
 import { supabase } from "../lib/supabaseClient";
 import { ACTIVE_CLIENT_STATUS, HOT_CLIENT_STATUS, CLIENT_STATUS_COLOR, IMPORTANCE_COLOR } from "../lib/constants";
-import { formatDate, todayISO, sumAmountsByCurrency, formatMultiCurrencyTotal } from "../lib/utils";
-import { StatCard, EmptyState, ConfirmDialog, Toast } from "../components/ui/Basics";
+import { formatDate, todayISO, sumAmountsByCurrency, formatMultiCurrencyTotal, formatMoney } from "../lib/utils";
+import { EmptyState, ConfirmDialog, Toast, Card, CardHeader, CardBody } from "../components/ui/Basics";
+import MetricCard from "../components/MetricCard";
 import Badge from "../components/ui/Badge";
 import ClientProgressTimeline from "../components/ClientProgressTimeline";
 import ScheduleWidget from "../components/ScheduleWidget";
 import TodoWidget from "../components/TodoWidget";
+
+/** 두 값을 비교해 증감 배지({direction, value})를 만듭니다. 데이터가 없으면 null(가짜 수치를 만들지 않음). */
+function trendFrom(current, previous) {
+  if (previous === 0) {
+    if (current === 0) return null;
+    return { direction: "up", value: "신규" };
+  }
+  const pct = Math.round(((current - previous) / previous) * 100);
+  if (pct === 0) return { direction: "flat", value: "0%" };
+  return { direction: pct > 0 ? "up" : "down", value: `${pct > 0 ? "+" : ""}${pct}%` };
+}
 
 function CustomItemView({ item }) {
   const style = item.style_json || {};
@@ -199,9 +211,23 @@ export default function Dashboard({ onNavigateToClient, onNavigate, session }) {
 
   const clientMap = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c])), [clients]);
 
-  // ---- KPI 카드 계산 ----
+  // ---- KPI 카드 계산 (전월/전일 대비 등은 실제로 계산 가능한 값만 사용, 가짜 수치 없음) ----
+  const yesterday = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }, []);
+
   const newInquiriesToday = useMemo(
     () => clients.filter((c) => (c.createdAt || "").slice(0, 10) === today).length,
+    [clients, today]
+  );
+  const newInquiriesYesterday = useMemo(
+    () => clients.filter((c) => (c.createdAt || "").slice(0, 10) === yesterday).length,
+    [clients, yesterday]
+  );
+  const todaysNewClientNames = useMemo(
+    () => clients.filter((c) => (c.createdAt || "").slice(0, 10) === today).map((c) => ({ label: c.companyName, value: c.country || "" })),
     [clients, today]
   );
 
@@ -211,27 +237,89 @@ export default function Dashboard({ onNavigateToClient, onNavigate, session }) {
     const now = new Date();
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   };
+  const isLastMonth = (dateStr) => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    const now = new Date();
+    const last = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return d.getFullYear() === last.getFullYear() && d.getMonth() === last.getMonth();
+  };
+  const last6MonthsKrw = (rows, dateKey) => {
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const target = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const total = rows
+        .filter((r) => {
+          if (!r[dateKey] || (r.currency && r.currency !== "KRW")) return false;
+          const d = new Date(r[dateKey]);
+          return d.getFullYear() === target.getFullYear() && d.getMonth() === target.getMonth();
+        })
+        .reduce((s, r) => s + (r.totalAmount || 0), 0);
+      return { label: `${target.getMonth() + 1}월`, value: total };
+    });
+  };
 
-  const quoteAmountMonth = useMemo(
-    () => sumAmountsByCurrency(quotes.filter((q) => isThisMonth(q.quoteDate))),
+  const quotesThisMonth = useMemo(() => quotes.filter((q) => isThisMonth(q.quoteDate)), [quotes]);
+  const quotesLastMonth = useMemo(() => quotes.filter((q) => isLastMonth(q.quoteDate)), [quotes]);
+  const contractsThisMonth = useMemo(() => quotes.filter((q) => q.status === "승인" && isThisMonth(q.quoteDate)), [quotes]);
+  const contractsLastMonth = useMemo(() => quotes.filter((q) => q.status === "승인" && isLastMonth(q.quoteDate)), [quotes]);
+
+  const quoteAmountMonth = useMemo(() => sumAmountsByCurrency(quotesThisMonth), [quotesThisMonth]);
+  const quoteAmountLastMonth = useMemo(() => sumAmountsByCurrency(quotesLastMonth), [quotesLastMonth]);
+  const contractAmountMonth = useMemo(() => sumAmountsByCurrency(contractsThisMonth), [contractsThisMonth]);
+  const contractAmountLastMonth = useMemo(() => sumAmountsByCurrency(contractsLastMonth), [contractsLastMonth]);
+  const quoteAmountHistory = useMemo(() => last6MonthsKrw(quotes, "quoteDate"), [quotes]);
+  const contractAmountHistory = useMemo(
+    () => last6MonthsKrw(quotes.filter((q) => q.status === "승인"), "quoteDate"),
     [quotes]
   );
-  const contractAmountMonth = useMemo(
-    () => sumAmountsByCurrency(quotes.filter((q) => q.status === "승인" && isThisMonth(q.quoteDate))),
-    [quotes]
-  );
 
-  const shipmentPendingCount = useMemo(
-    () => clients.filter((c) => c.status === "발주대기").length,
-    [clients]
-  );
+  const shipmentPendingClients = useMemo(() => clients.filter((c) => c.status === "발주대기"), [clients]);
+  const shipmentPendingCount = shipmentPendingClients.length;
 
-  const lowStockCount = useMemo(
+  const lowStockProducts = useMemo(
     () =>
       products.filter(
         (p) => p.safetyStock !== "" && p.safetyStock != null && Number(p.currentStock || 0) < Number(p.safetyStock)
-      ).length,
+      ),
     [products]
+  );
+  const lowStockCount = lowStockProducts.length;
+
+  const clientStatusBreakdown = useMemo(() => {
+    const counts = {};
+    for (const c of clients) counts[c.status] = (counts[c.status] || 0) + 1;
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, value]) => ({ label, value: `${value}개` }));
+  }, [clients]);
+
+  const activeStatusBreakdown = useMemo(() => {
+    const counts = {};
+    for (const c of clients) {
+      if (!ACTIVE_CLIENT_STATUS.includes(c.status)) continue;
+      counts[c.status] = (counts[c.status] || 0) + 1;
+    }
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, value]) => ({ label, value: `${value}건` }));
+  }, [clients]);
+
+  const recentSamples = useMemo(
+    () =>
+      [...samples]
+        .sort((a, b) => new Date(b.sentDate) - new Date(a.sentDate))
+        .slice(0, 5)
+        .map((s) => ({ label: clientMap[s.clientId]?.companyName || "삭제된 거래처", value: formatDate(s.sentDate) })),
+    [samples, clientMap]
+  );
+  const recentQuotes = useMemo(
+    () =>
+      [...quotes]
+        .sort((a, b) => new Date(b.quoteDate) - new Date(a.quoteDate))
+        .slice(0, 5)
+        .map((q) => ({ label: clientMap[q.clientId]?.companyName || "삭제된 거래처", value: q.status })),
+    [quotes, clientMap]
   );
 
   const canvasHeight = useMemo(
@@ -241,54 +329,74 @@ export default function Dashboard({ onNavigateToClient, onNavigate, session }) {
 
   const renderWidget = (widgetKey) => {
     switch (widgetKey) {
-      case "stat_clients":
+      case "stat_clients": {
+        const thisMonthNew = clients.filter((c) => isThisMonth(c.createdAt)).length;
+        const lastMonthNew = clients.filter((c) => isLastMonth(c.createdAt)).length;
         return (
-          <StatCard
+          <MetricCard
             label="전체 거래처"
             value={`${clients.length}개`}
             icon={Building2}
             accent="jade"
             onClick={() => onNavigate("clients")}
+            trend={trendFrom(thisMonthNew, lastMonthNew)}
+            compare={{ prevLabel: "전월 신규", prevValue: `${lastMonthNew}개`, curLabel: "이번달 신규", curValue: `${thisMonthNew}개` }}
+            breakdown={clientStatusBreakdown}
+            breakdownTitle="상태별 현황"
           />
         );
+      }
       case "stat_active":
         return (
-          <StatCard
+          <MetricCard
             label="진행 중인 상담"
             value={`${activeCount}건`}
             icon={MessagesSquare}
             accent="jade"
             onClick={() => onNavigate("clients")}
+            breakdown={activeStatusBreakdown}
+            breakdownTitle="단계별 현황"
           />
         );
-      case "stat_samples":
+      case "stat_samples": {
+        const thisMonthCount = samples.filter((s) => isThisMonth(s.sentDate)).length;
+        const lastMonthCount = samples.filter((s) => isLastMonth(s.sentDate)).length;
         return (
-          <StatCard
+          <MetricCard
             label="샘플 발송"
             value={`${samples.length}건`}
             icon={PackageOpen}
             accent="gold"
             onClick={() => onNavigate("samples")}
+            trend={trendFrom(thisMonthCount, lastMonthCount)}
+            compare={{ prevLabel: "전월 발송", prevValue: `${lastMonthCount}건`, curLabel: "이번달 발송", curValue: `${thisMonthCount}건` }}
+            breakdown={recentSamples}
+            breakdownTitle="최근 발송"
           />
         );
-      case "stat_quotes":
+      }
+      case "stat_quotes": {
+        const thisMonthCount = quotesThisMonth.length;
+        const lastMonthCount = quotesLastMonth.length;
         return (
-          <StatCard
+          <MetricCard
             label="견적 발송"
             value={`${quotes.length}건`}
             icon={FileText}
             accent="clay"
             onClick={() => onNavigate("quotes")}
+            trend={trendFrom(thisMonthCount, lastMonthCount)}
+            compare={{ prevLabel: "전월 작성", prevValue: `${lastMonthCount}건`, curLabel: "이번달 작성", curValue: `${thisMonthCount}건` }}
+            breakdown={recentQuotes}
+            breakdownTitle="최근 견적"
           />
         );
+      }
       case "hot_clients":
         return (
-          <section className="h-full flex flex-col bg-white border border-line rounded-card shadow-card overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-4 border-b border-line shrink-0">
-              <Flame size={16} className="text-clay-500" />
-              <h2 className="font-display text-sm font-semibold text-ink">발주 가능성이 높은 거래처</h2>
-            </div>
-            <div className="flex-1 overflow-y-auto">
+          <Card>
+            <CardHeader icon={Flame} title="발주 가능성이 높은 거래처" />
+            <CardBody>
               {hotClients.length === 0 ? (
                 <div className="p-5">
                   <EmptyState title="아직 없습니다" description="중요도 '상'이면서 견적/인허가/발주 단계인 거래처가 여기 표시됩니다." />
@@ -313,17 +421,14 @@ export default function Dashboard({ onNavigateToClient, onNavigate, session }) {
                   ))}
                 </ul>
               )}
-            </div>
-          </section>
+            </CardBody>
+          </Card>
         );
       case "today_followups":
         return (
-          <section className="h-full flex flex-col bg-white border border-line rounded-card shadow-card overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-4 border-b border-line shrink-0">
-              <CalendarClock size={16} className="text-jade-500" />
-              <h2 className="font-display text-sm font-semibold text-ink">오늘 해야 할 후속 연락</h2>
-            </div>
-            <div className="flex-1 overflow-y-auto">
+          <Card>
+            <CardHeader icon={CalendarClock} title="오늘 해야 할 후속 연락" />
+            <CardBody>
               {todayFollowUps.length === 0 ? (
                 <div className="p-5">
                   <EmptyState title="오늘 예정된 후속 연락이 없습니다" description="상담 이력과 샘플 발송에서 등록한 후속 연락일이 여기 표시됩니다." />
@@ -362,26 +467,26 @@ export default function Dashboard({ onNavigateToClient, onNavigate, session }) {
                   })}
                 </ul>
               )}
-            </div>
-          </section>
+            </CardBody>
+          </Card>
         );
       case "recent_updates":
         return (
-          <section className="h-full flex flex-col bg-white border border-line rounded-card shadow-card overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-line shrink-0">
-              <div className="flex items-center gap-2">
-                <History size={16} className="text-jade-500" />
-                <h2 className="font-display text-sm font-semibold text-ink">최근 업데이트</h2>
-              </div>
-              <button
-                onClick={() => onNavigate("logs")}
-                className="text-xs font-medium hover:underline"
-                style={{ color: "var(--brand-primary)" }}
-              >
-                전체보기
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
+          <Card>
+            <CardHeader
+              icon={History}
+              title="최근 업데이트"
+              action={
+                <button
+                  onClick={() => onNavigate("logs")}
+                  className="text-xs font-medium hover:underline"
+                  style={{ color: "var(--brand-primary)" }}
+                >
+                  전체보기
+                </button>
+              }
+            />
+            <CardBody>
               {recentLogs.length === 0 ? (
                 <div className="p-5">
                   <EmptyState title="아직 기록된 변경 이력이 없습니다" description="거래처, 제품, 견적, 샘플, 설정 변경 등이 자동으로 기록됩니다." />
@@ -401,17 +506,14 @@ export default function Dashboard({ onNavigateToClient, onNavigate, session }) {
                   ))}
                 </ul>
               )}
-            </div>
-          </section>
+            </CardBody>
+          </Card>
         );
       case "client_progress_timeline":
         return (
-          <section className="h-full flex flex-col bg-white border border-line rounded-card shadow-card overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-4 border-b border-line shrink-0">
-              <Route size={16} className="text-jade-500" />
-              <h2 className="font-display text-sm font-semibold text-ink">거래처 진행 현황</h2>
-            </div>
-            <div className="flex-1 overflow-y-auto">
+          <Card>
+            <CardHeader icon={Route} title="거래처 진행 현황" />
+            <CardBody>
               {progressClients.length === 0 ? (
                 <div className="p-5">
                   <EmptyState title="표시할 거래처가 없습니다" description="거래처를 등록하면 진행 단계가 여기 표시됩니다." />
@@ -428,57 +530,81 @@ export default function Dashboard({ onNavigateToClient, onNavigate, session }) {
                   ))}
                 </div>
               )}
-            </div>
-          </section>
+            </CardBody>
+          </Card>
         );
       case "kpi_new_inquiries_today":
         return (
-          <StatCard
+          <MetricCard
             label="오늘 신규 문의"
             value={`${newInquiriesToday}건`}
             icon={UserPlus}
             accent="jade"
             onClick={() => onNavigate("clients")}
+            trend={trendFrom(newInquiriesToday, newInquiriesYesterday)}
+            compare={{ prevLabel: "어제", prevValue: `${newInquiriesYesterday}건`, curLabel: "오늘", curValue: `${newInquiriesToday}건` }}
+            breakdown={todaysNewClientNames}
+            breakdownTitle="오늘 등록된 거래처"
           />
         );
       case "kpi_quote_amount_month":
         return (
-          <StatCard
+          <MetricCard
             label="이번달 견적금액"
             value={formatMultiCurrencyTotal(quoteAmountMonth)}
             icon={Receipt}
             accent="clay"
             onClick={() => onNavigate("quotes")}
+            trend={trendFrom(quoteAmountMonth.KRW || 0, quoteAmountLastMonth.KRW || 0)}
+            compare={{
+              prevLabel: "전월",
+              prevValue: formatMoney(quoteAmountLastMonth.KRW || 0),
+              curLabel: "이번달",
+              curValue: formatMoney(quoteAmountMonth.KRW || 0),
+            }}
+            history={quoteAmountHistory}
           />
         );
       case "kpi_contract_amount_month":
         return (
-          <StatCard
+          <MetricCard
             label="이번달 계약금액"
             value={formatMultiCurrencyTotal(contractAmountMonth)}
             icon={BadgeCheck}
             accent="jade"
             onClick={() => onNavigate("quotes")}
+            trend={trendFrom(contractAmountMonth.KRW || 0, contractAmountLastMonth.KRW || 0)}
+            compare={{
+              prevLabel: "전월",
+              prevValue: formatMoney(contractAmountLastMonth.KRW || 0),
+              curLabel: "이번달",
+              curValue: formatMoney(contractAmountMonth.KRW || 0),
+            }}
+            history={contractAmountHistory}
           />
         );
       case "kpi_shipment_pending":
         return (
-          <StatCard
+          <MetricCard
             label="출고대기 건수"
             value={`${shipmentPendingCount}건`}
             icon={Truck}
             accent="gold"
             onClick={() => onNavigate("clients")}
+            breakdown={shipmentPendingClients.map((c) => ({ label: c.companyName, value: c.country || "" }))}
+            breakdownTitle="출고대기 거래처"
           />
         );
       case "kpi_low_stock":
         return (
-          <StatCard
+          <MetricCard
             label="재고부족 품목"
             value={`${lowStockCount}개`}
             icon={AlertTriangle}
             accent="clay"
             onClick={() => onNavigate("products")}
+            breakdown={lowStockProducts.map((p) => ({ label: p.name, value: `${p.currentStock || 0}/${p.safetyStock}` }))}
+            breakdownTitle="재고부족 제품 (현재고/안전재고)"
           />
         );
       case "schedule_widget":

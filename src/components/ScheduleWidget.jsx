@@ -3,7 +3,7 @@ import { CalendarDays, Plus, Trash2, X } from "lucide-react";
 import { fetchScheduleEvents, createScheduleEvent, deleteScheduleEvent } from "../lib/scheduleEvents";
 import { formatDate, todayISO } from "../lib/utils";
 import { Field, TextInput, TextArea } from "./ui/Field";
-import { Button } from "./ui/Basics";
+import { Button, Card, CardHeader, CardBody } from "./ui/Basics";
 
 const EMPTY = { title: "", event_date: todayISO(), event_type: "기타", memo: "" };
 
@@ -73,19 +73,19 @@ export default function ScheduleWidget({ session }) {
   };
 
   return (
-    <section className="h-full flex flex-col bg-white border border-line rounded-card shadow-card overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-line shrink-0">
-        <div className="flex items-center gap-2">
-          <CalendarDays size={16} className="text-jade-500" />
-          <h2 className="font-display text-sm font-semibold text-ink">일정</h2>
-        </div>
-        <button
-          onClick={() => setFormOpen((v) => !v)}
-          className="p-1 rounded-md text-subink hover:bg-porcelain hover:text-jade-600"
-        >
-          {formOpen ? <X size={15} /> : <Plus size={15} />}
-        </button>
-      </div>
+    <Card>
+      <CardHeader
+        icon={CalendarDays}
+        title="일정"
+        action={
+          <button
+            onClick={() => setFormOpen((v) => !v)}
+            className="p-1 rounded-md text-subink hover:bg-porcelain hover:text-jade-600"
+          >
+            {formOpen ? <X size={15} /> : <Plus size={15} />}
+          </button>
+        }
+      />
 
       {formOpen && (
         <form onSubmit={addEvent} className="p-4 border-b border-line space-y-2 bg-porcelain/40">
@@ -119,7 +119,7 @@ export default function ScheduleWidget({ session }) {
         </form>
       )}
 
-      <div className="flex-1 overflow-y-auto">
+      <CardBody>
         <p className="text-xs font-medium text-subink px-4 pt-3">오늘</p>
         {todayEvents.length === 0 ? (
           <p className="text-sm text-subink text-center py-3">오늘 일정이 없습니다.</p>
@@ -132,7 +132,7 @@ export default function ScheduleWidget({ session }) {
         ) : (
           <ul className="divide-y divide-line">{weekEvents.map(renderItem)}</ul>
         )}
-      </div>
-    </section>
+      </CardBody>
+    </Card>
   );
 }

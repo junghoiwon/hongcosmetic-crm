@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ListChecks, Plus, Trash2 } from "lucide-react";
 import { fetchMyTodos, createTodo, toggleTodoDone, deleteTodo } from "../lib/todos";
+import { Card, CardHeader, CardBody } from "./ui/Basics";
 
 export default function TodoWidget() {
   const [todos, setTodos] = useState([]);
@@ -31,11 +32,8 @@ export default function TodoWidget() {
   };
 
   return (
-    <section className="h-full flex flex-col bg-white border border-line rounded-card shadow-card overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-4 border-b border-line shrink-0">
-        <ListChecks size={16} className="text-jade-500" />
-        <h2 className="font-display text-sm font-semibold text-ink">할 일</h2>
-      </div>
+    <Card>
+      <CardHeader icon={ListChecks} title="할 일" />
 
       <form onSubmit={add} className="flex items-center gap-2 px-4 py-3 border-b border-line shrink-0">
         <input
@@ -49,7 +47,7 @@ export default function TodoWidget() {
         </button>
       </form>
 
-      <div className="flex-1 overflow-y-auto">
+      <CardBody>
         {todos.length === 0 ? (
           <p className="text-sm text-subink text-center py-6">등록된 할 일이 없습니다.</p>
         ) : (
@@ -75,7 +73,7 @@ export default function TodoWidget() {
             ))}
           </ul>
         )}
-      </div>
-    </section>
+      </CardBody>
+    </Card>
   );
 }
