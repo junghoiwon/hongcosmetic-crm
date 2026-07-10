@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, FileText, Search, Printer, X, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Trash2, FileText, Search, Printer, X, ChevronUp, ChevronDown, ArrowRightLeft } from "lucide-react";
 import { quotesDB, clientsDB, productsDB, logActivity, getSettings } from "../lib/db";
 import { canAccess } from "../lib/permissions";
 import { fetchAllQuotationItems, replaceQuotationItems } from "../lib/quotationItems";
+import { createSalesRecord, replaceSalesRecordItems } from "../lib/salesRecords";
 import { printQuotation } from "../lib/quotePrint";
 import { QUOTE_STATUS, QUOTE_STATUS_COLOR, CURRENCY } from "../lib/constants";
 import { formatMoney, formatDate, todayISO } from "../lib/utils";
@@ -74,6 +75,7 @@ export default function Quotes({ session, permissionMap }) {
   const canCreate = canAccess(session, permissionMap, "quotes", "create");
   const canEdit = canAccess(session, permissionMap, "quotes", "edit");
   const canDelete = canAccess(session, permissionMap, "quotes", "delete");
+  const canCreateSalesRecord = canAccess(session, permissionMap, "sales_records", "create");
 
   const load = () => {
     quotesDB.list().then((rows) =>
@@ -280,6 +282,41 @@ export default function Quotes({ session, permissionMap }) {
     printQuotation({ quote: q, items: itemsOf(q), client, settings });
   };
 
+  const convertToSale = async (q) => {
+    const qItems = itemsOf(q);
+    if (qItems.length === 0) return;
+    const created = await createSalesRecord({
+      clientId: q.clientId,
+      rep: session?.name || "",
+      saleDate: todayISO(),
+      saleType: "견적전환",
+      paymentStatus: "미입금",
+      currency: q.currency || "KRW",
+      exchangeRate: 1,
+      totalAmount: q.totalAmount || 0,
+      krwAmount: q.currency === "KRW" ? q.totalAmount || 0 : 0,
+      sourceQuotationId: q.id,
+      memo: `견적서(${formatDate(q.quoteDate)})에서 전환됨`,
+    });
+    await replaceSalesRecordItems(
+      created.id,
+      qItems.map((it) => ({
+        productId: it.productId || null,
+        productName: it.productName,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        discountAmount: it.discountAmount || 0,
+        supplyAmount: it.supplyAmount ?? it.quantity * it.unitPrice,
+      }))
+    );
+    await logActivity({
+      actor: session?.name || "사용자",
+      action: "견적→판매실적 전환",
+      summary: `${clientName(q.clientId)} 견적을 판매실적으로 전환했습니다.`,
+    });
+    setToastMsg("판매실적으로 전환했습니다. '판매실적 등록' 메뉴에서 확인/수정할 수 있습니다.");
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -359,6 +396,18 @@ export default function Quotes({ session, permissionMap }) {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 justify-end">
+                        {q.status === "승인" && canCreateSalesRecord && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              convertToSale(q);
+                            }}
+                            className="p-1.5 rounded-md text-subink hover:bg-white hover:text-jade-600"
+                            title="판매실적으로 전환"
+                          >
+                            <ArrowRightLeft size={14} />
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();

@@ -26,6 +26,7 @@ import {
   Circle,
   MessagesSquare,
   CalendarDays,
+  Receipt,
 } from "lucide-react";
 
 export const ICON_MAP = {
@@ -48,6 +49,7 @@ export const ICON_MAP = {
   Circle,
   MessagesSquare,
   CalendarDays,
+  Receipt,
 };
 
 export const ICON_OPTIONS = Object.keys(ICON_MAP);

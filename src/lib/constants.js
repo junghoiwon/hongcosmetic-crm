@@ -70,6 +70,26 @@ export const QUOTE_STATUS_COLOR = {
 
 export const CARRIERS = ["EMS", "DHL", "FedEx", "기타"];
 
+export const SALE_TYPE = [
+  "견적전환",
+  "직접입력",
+  "수출",
+  "내수도매",
+  "온라인",
+  "오프라인",
+  "면세",
+  "라이브커머스",
+  "기타",
+];
+
+export const PAYMENT_STATUS = ["미입금", "부분입금", "입금완료"];
+
+export const PAYMENT_STATUS_COLOR = {
+  미입금: "bg-clay-100 text-clay-600",
+  부분입금: "bg-gold-400/15 text-gold-500",
+  입금완료: "bg-jade-600 text-white",
+};
+
 export const CALENDAR_EVENT_TYPES = [
   "상담",
   "미팅",

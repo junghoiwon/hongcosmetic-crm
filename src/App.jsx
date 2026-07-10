@@ -8,6 +8,7 @@ import Quotes from "./pages/Quotes";
 import Samples from "./pages/Samples";
 import ConsultationLog from "./pages/ConsultationLog";
 import CalendarPage from "./pages/Calendar";
+import SalesRecords from "./pages/SalesRecords";
 import SalesReport from "./pages/SalesReport";
 import Settings from "./pages/Settings";
 import UpdateLog from "./pages/UpdateLog";
@@ -272,6 +273,8 @@ export default function App() {
         );
       case "calendar":
         return <CalendarPage session={session} onNavigateToClient={navigateToClient} />;
+      case "sales_records":
+        return <SalesRecords session={session} permissionMap={permissionMap} />;
       case "sales_report":
         return <SalesReport />;
       case "logs":
