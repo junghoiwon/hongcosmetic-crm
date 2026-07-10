@@ -1,15 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Type, ImageIcon, Square, LayoutDashboard, Trash2, Upload, Eye, EyeOff, RotateCcw } from "lucide-react";
+import {
+  Type,
+  ImageIcon,
+  Square,
+  LayoutDashboard,
+  Trash2,
+  Upload,
+  Eye,
+  EyeOff,
+  RotateCcw,
+  ChevronUp,
+  ChevronDown,
+  Archive,
+  ArchiveRestore,
+  Layers,
+} from "lucide-react";
 import {
   fetchAllLayoutItemsForEditor,
   createLayoutItem,
   updateLayoutItem,
   deleteLayoutItem,
+  hideLayoutItem,
+  restoreLayoutItem,
   BUILTIN_WIDGETS,
   WIDGET_DEFAULT_LAYOUT,
   SIZE_PRESETS,
 } from "../lib/dashboardLayout";
-import { Field, TextArea, Select, NumberInput } from "../components/ui/Field";
+import { formatDate } from "../lib/utils";
+import { Field, TextArea, TextInput, Select, NumberInput } from "../components/ui/Field";
 import { Button, ConfirmDialog } from "../components/ui/Basics";
 
 const CANVAS_WIDTH = 1160;
@@ -43,6 +61,13 @@ const DEFAULTS = {
 };
 
 const TYPE_LABELS = { text: "텍스트", image: "이미지", shape: "도형", widget: "기존 대시보드 요소" };
+
+function layerLabel(item) {
+  if (item.name?.trim()) return item.name.trim();
+  if (item.item_type === "widget") return BUILTIN_WIDGETS[item.content] || item.content;
+  if (item.item_type === "text") return item.content?.trim().slice(0, 18) || "(빈 텍스트)";
+  return TYPE_LABELS[item.item_type];
+}
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -110,12 +135,14 @@ function ItemPreview({ item }) {
   );
 }
 
-export default function LayoutEditor() {
+export default function LayoutEditor({ session }) {
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [draft, setDraft] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [permanentDeleteTarget, setPermanentDeleteTarget] = useState(null);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
   const dragRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -125,9 +152,15 @@ export default function LayoutEditor() {
     load();
   }, []);
 
-  const canvasHeight = useMemo(
-    () => Math.max(MIN_CANVAS_HEIGHT, ...items.map((i) => i.y + i.height), 0) + 40,
+  const activeItems = useMemo(
+    () => items.filter((i) => i.is_active).sort((a, b) => a.sort_order - b.sort_order),
     [items]
+  );
+  const hiddenItems = useMemo(() => items.filter((i) => !i.is_active), [items]);
+
+  const canvasHeight = useMemo(
+    () => Math.max(MIN_CANVAS_HEIGHT, ...activeItems.map((i) => i.y + i.height), 0) + 40,
+    [activeItems]
   );
 
   const selected = items.find((i) => i.id === selectedId) || null;
@@ -138,13 +171,13 @@ export default function LayoutEditor() {
       return;
     }
     setDraft({
+      name: selected.name || "",
       content: selected.content || "",
       image_url: selected.image_url || "",
       x: selected.x,
       y: selected.y,
       width: selected.width,
       height: selected.height,
-      is_active: selected.is_active,
       style_json: { ...selected.style_json },
     });
   }, [selectedId, selected?.x, selected?.y, selected?.width, selected?.height]);
@@ -229,13 +262,13 @@ export default function LayoutEditor() {
   const saveDraft = async () => {
     if (!selected || !draft) return;
     const patch = {
+      name: draft.name,
       content: draft.content,
       image_url: draft.image_url,
       x: Number(draft.x),
       y: Number(draft.y),
       width: Number(draft.width),
       height: Number(draft.height),
-      is_active: draft.is_active,
       style_json: draft.style_json,
     };
     const updated = await updateLayoutItem(selected.id, patch);
@@ -247,6 +280,13 @@ export default function LayoutEditor() {
     setDeleteTarget(null);
     await deleteLayoutItem(target.id);
     if (selectedId === target.id) setSelectedId(null);
+    setItems((prev) => prev.filter((i) => i.id !== target.id));
+  };
+
+  const confirmPermanentDelete = async () => {
+    const target = permanentDeleteTarget;
+    setPermanentDeleteTarget(null);
+    await deleteLayoutItem(target.id);
     setItems((prev) => prev.filter((i) => i.id !== target.id));
   };
 
@@ -275,9 +315,33 @@ export default function LayoutEditor() {
     load();
   };
 
+  // ---- 레이어 패널: 숨기기/복원/앞으로/뒤로 ----
+  const hideItem = async (item) => {
+    await hideLayoutItem(item.id, session?.name);
+    if (selectedId === item.id) setSelectedId(null);
+    load();
+  };
+
+  const restoreItem = async (item) => {
+    await restoreLayoutItem(item.id);
+    load();
+  };
+
+  const moveLayer = async (item, direction) => {
+    const idx = activeItems.findIndex((i) => i.id === item.id);
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= activeItems.length) return;
+    const other = activeItems[targetIdx];
+    await Promise.all([
+      updateLayoutItem(item.id, { sort_order: other.sort_order }),
+      updateLayoutItem(other.id, { sort_order: item.sort_order }),
+    ]);
+    load();
+  };
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
         <div>
           <h1 className="font-display text-2xl font-semibold text-ink">화면 편집</h1>
           <p className="text-sm text-subink mt-1">
@@ -302,35 +366,123 @@ export default function LayoutEditor() {
 
       <p className="text-xs text-subink mb-2">
         점선 테두리의 초록색 칸은 대시보드에 이미 있던 기존 요소(통계 카드 등)입니다. 드래그·크기조절은
-        10px 단위로 자동 정렬(스냅)되고, 아래 편집 패널의 크기 버튼으로 한 번에 맞출 수도 있습니다.
-        정렬이 꼬였다면 "기본 배치로 초기화"로 되돌리세요.
+        10px 단위로 자동 정렬(스냅)되고, 오른쪽 레이어 패널에서 순서/표시 여부를 관리할 수 있습니다. 숨긴
+        요소는 캔버스 공간을 차지하지 않고 "숨김 보관함"으로 이동합니다.
       </p>
-      <div className="overflow-x-auto mb-6">
-        <div
-          onMouseDown={() => setSelectedId(null)}
-          className="relative bg-white border border-line rounded-card shadow-card"
-          style={{ width: CANVAS_WIDTH, height: canvasHeight }}
-        >
-          {items.map((item) => (
-            <div
-              key={item.id}
-              onMouseDown={(e) => beginDrag(e, item, "move")}
-              className={`absolute cursor-move border ${
-                selectedId === item.id ? "border-jade-500 ring-2 ring-jade-500/25" : "border-transparent"
-              } ${item.is_active ? "" : "opacity-35"}`}
-              style={{ left: item.x, top: item.y, width: item.width, height: item.height }}
-            >
-              <ItemPreview item={item} />
+
+      <div className="flex gap-4 mb-6 items-start">
+        <div className="overflow-x-auto flex-1">
+          <div
+            onMouseDown={() => setSelectedId(null)}
+            className="relative bg-white border border-line rounded-card shadow-card"
+            style={{ width: CANVAS_WIDTH, height: canvasHeight }}
+          >
+            {activeItems.map((item) => (
               <div
-                onMouseDown={(e) => beginDrag(e, item, "resize")}
-                className="absolute -right-1.5 -bottom-1.5 w-3.5 h-3.5 rounded-full bg-jade-600 cursor-se-resize"
-              />
+                key={item.id}
+                onMouseDown={(e) => beginDrag(e, item, "move")}
+                className={`absolute cursor-move border ${
+                  selectedId === item.id ? "border-jade-500 ring-2 ring-jade-500/25" : "border-transparent"
+                }`}
+                style={{ left: item.x, top: item.y, width: item.width, height: item.height }}
+              >
+                <ItemPreview item={item} />
+                <div
+                  onMouseDown={(e) => beginDrag(e, item, "resize")}
+                  className="absolute -right-1.5 -bottom-1.5 w-3.5 h-3.5 rounded-full bg-jade-600 cursor-se-resize"
+                />
+              </div>
+            ))}
+            {activeItems.length === 0 && (
+              <p className="absolute inset-0 flex items-center justify-center text-sm text-subink">
+                위 버튼으로 텍스트/이미지/도형을 추가해보세요.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* 레이어 패널 */}
+        <div className="w-72 shrink-0 bg-white border border-line rounded-card shadow-card overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-line">
+            <Layers size={15} className="text-jade-500" />
+            <h2 className="font-display text-sm font-semibold text-ink">레이어 ({activeItems.length})</h2>
+          </div>
+          <div className="max-h-[420px] overflow-y-auto divide-y divide-line">
+            {activeItems.length === 0 ? (
+              <p className="text-xs text-subink text-center py-6">표시 중인 요소가 없습니다.</p>
+            ) : (
+              [...activeItems].reverse().map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => setSelectedId(item.id)}
+                  className={`flex items-center gap-1.5 px-3 py-2 cursor-pointer text-xs ${
+                    selectedId === item.id ? "bg-jade-50" : "hover:bg-porcelain/60"
+                  }`}
+                >
+                  <span className="flex-1 min-w-0 truncate text-ink">{layerLabel(item)}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); moveLayer(item, 1); }}
+                    title="앞으로 (위 레이어로)"
+                    className="p-1 rounded text-subink hover:text-jade-600"
+                  >
+                    <ChevronUp size={13} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); moveLayer(item, -1); }}
+                    title="뒤로 (아래 레이어로)"
+                    className="p-1 rounded text-subink hover:text-jade-600"
+                  >
+                    <ChevronDown size={13} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); hideItem(item); }}
+                    title="숨기기"
+                    className="p-1 rounded text-subink hover:text-clay-600"
+                  >
+                    <EyeOff size={13} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+          <button
+            onClick={() => setShowHidden((v) => !v)}
+            className="w-full flex items-center gap-2 px-4 py-2.5 border-t border-line text-xs text-subink hover:bg-porcelain"
+          >
+            <Archive size={13} /> 숨김 보관함 ({hiddenItems.length}){showHidden ? " 닫기" : " 열기"}
+          </button>
+          {showHidden && (
+            <div className="max-h-64 overflow-y-auto divide-y divide-line border-t border-line">
+              {hiddenItems.length === 0 ? (
+                <p className="text-xs text-subink text-center py-6">숨긴 요소가 없습니다.</p>
+              ) : (
+                hiddenItems.map((item) => (
+                  <div key={item.id} className="px-3 py-2 text-xs">
+                    <p className="text-ink font-medium truncate">{layerLabel(item)}</p>
+                    <p className="text-subink mt-0.5">
+                      {item.hidden_by && `${item.hidden_by} · `}
+                      {item.hidden_at ? formatDate(item.hidden_at) : ""}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <button
+                        onClick={() => restoreItem(item)}
+                        className="flex items-center gap-1 text-jade-600 hover:underline"
+                      >
+                        <ArchiveRestore size={12} /> 복원
+                      </button>
+                      {item.item_type !== "widget" && (
+                        <button
+                          onClick={() => setPermanentDeleteTarget(item)}
+                          className="flex items-center gap-1 text-clay-600 hover:underline"
+                        >
+                          <Trash2 size={12} /> 완전삭제
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-          ))}
-          {items.length === 0 && (
-            <p className="absolute inset-0 flex items-center justify-center text-sm text-subink">
-              위 버튼으로 텍스트/이미지/도형을 추가해보세요.
-            </p>
           )}
         </div>
       </div>
@@ -344,11 +496,11 @@ export default function LayoutEditor() {
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => setDraft({ ...draft, is_active: !draft.is_active })}
-                title={draft.is_active ? "화면에서 숨기기" : "화면에 표시하기"}
+                onClick={() => hideItem(selected)}
+                title="화면에서 숨기기"
                 className="p-1.5 rounded-md text-subink hover:bg-porcelain hover:text-jade-600"
               >
-                {draft.is_active ? <Eye size={15} /> : <EyeOff size={15} />}
+                <Eye size={15} />
               </button>
               {selected.item_type !== "widget" && (
                 <button
@@ -361,17 +513,15 @@ export default function LayoutEditor() {
             </div>
           </div>
 
-          {!draft.is_active && (
-            <p className="text-xs text-clay-600 mb-4">
-              현재 대시보드 화면에서 숨겨져 있습니다. "저장"을 눌러야 상태가 반영됩니다.
-            </p>
-          )}
-
           {selected.item_type === "widget" && (
             <p className="text-xs text-subink mb-4">
               대시보드 기본 요소는 삭제할 수 없고, 위치·크기 변경과 표시/숨김만 가능합니다.
             </p>
           )}
+
+          <Field label="레이어 이름" hint="비워두면 자동으로 표시됩니다." className="mb-3">
+            <TextInput value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder={layerLabel(selected)} />
+          </Field>
 
           <div className="grid grid-cols-2 gap-4 mb-3">
             <Field label="X">
@@ -501,6 +651,14 @@ export default function LayoutEditor() {
         description="삭제된 요소는 복구할 수 없습니다."
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={!!permanentDeleteTarget}
+        title="숨김 보관함에서 완전히 삭제할까요?"
+        description="완전삭제된 요소는 복구할 수 없습니다."
+        onConfirm={confirmPermanentDelete}
+        onCancel={() => setPermanentDeleteTarget(null)}
       />
 
       <ConfirmDialog

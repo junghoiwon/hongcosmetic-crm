@@ -238,7 +238,7 @@ export default function App() {
       return isAdminProfile(session) ? <Users session={session} /> : accessDenied;
     }
     if (page === "layout") {
-      return isAdminProfile(session) ? <LayoutEditor /> : accessDenied;
+      return isAdminProfile(session) ? <LayoutEditor session={session} /> : accessDenied;
     }
     if (page === "menu-editor") {
       return isAdminProfile(session) ? <MenuEditor onMenusChanged={reloadAppMenus} /> : accessDenied;

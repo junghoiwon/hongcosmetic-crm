@@ -7,7 +7,8 @@
  */
 import { supabase } from "./supabaseClient";
 
-const COLUMNS = "id, item_type, content, image_url, x, y, width, height, style_json, sort_order, is_active";
+const COLUMNS =
+  "id, item_type, content, image_url, x, y, width, height, style_json, sort_order, is_active, name, hidden_at, hidden_by";
 
 /**
  * 기존 대시보드 화면(통계 카드, 발주가능성 거래처, 오늘 후속연락, 최근 업데이트)을
@@ -108,6 +109,16 @@ export async function updateLayoutItem(id, patch) {
     throw error;
   }
   return data;
+}
+
+/** 요소를 숨김 보관함으로 보냅니다. 캔버스에서 완전히 제외되고(공간 차지 안 함), 위치/크기는 그대로 보존되어 복원 시 원래 자리로 돌아옵니다. */
+export async function hideLayoutItem(id, actorName) {
+  return updateLayoutItem(id, { is_active: false, hidden_at: new Date().toISOString(), hidden_by: actorName || "" });
+}
+
+/** 숨김 보관함에서 원래 위치로 복원합니다. */
+export async function restoreLayoutItem(id) {
+  return updateLayoutItem(id, { is_active: true, hidden_at: null, hidden_by: "" });
 }
 
 export async function deleteLayoutItem(id) {
